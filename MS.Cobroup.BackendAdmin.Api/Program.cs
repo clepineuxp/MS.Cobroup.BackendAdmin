@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using MS.Cobroup.BackendAdmin.Api.Security;
 using MS.Cobroup.BackendAdmin.Core.Identity;
+using MS.Cobroup.BackendAdmin.Core.LoanTemplates;
 using MS.Cobroup.BackendAdmin.Core.Configuration;
 using MS.Cobroup.BackendAdmin.Core.Customers;
 using MS.Cobroup.BackendAdmin.Core.Routes;
@@ -151,6 +152,7 @@ builder.Services.AddScoped<IIdentityRepository, EfIdentityRepository>();
 builder.Services.AddScoped<IRouteManagementRepository, EfRouteManagementRepository>();
 builder.Services.AddScoped<IUserDirectoryRepository, EfUserDirectoryRepository>();
 builder.Services.AddScoped<IOrganizationSettingsRepository, EfOrganizationSettingsRepository>();
+builder.Services.AddScoped<ILoanTemplateRepository, EfLoanTemplateRepository>();
 builder.Services.AddScoped<IPasswordCredentialService, AspNetPasswordCredentialService>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Identity.IPasswordHasher<object>,
     Microsoft.AspNetCore.Identity.PasswordHasher<object>>();
@@ -164,6 +166,7 @@ builder.Services.AddScoped<UpdateRouteService>();
 builder.Services.AddScoped<ListAccessibleRoutesService>();
 builder.Services.AddScoped<OrganizationSettingsService>();
 builder.Services.AddScoped<CustomerAdministrationService>();
+builder.Services.AddScoped<LoanTemplateService>();
 builder.Services.AddHttpClient<IOperationalCustomerDirectory, OperationalCustomerDirectoryClient>((services, client) =>
 {
     var configuration = services.GetRequiredService<IConfiguration>();

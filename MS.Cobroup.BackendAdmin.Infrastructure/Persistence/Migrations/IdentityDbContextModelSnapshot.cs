@@ -204,6 +204,143 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                     b.ToTable("security_audit", (string)null);
                 });
 
+            modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.LoanTemplates.LoanTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AllowedPercentagesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Classification")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("MaxLoanDays")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("MaxPrincipalAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.HasIndex("OrganizationId", "NormalizedName")
+                        .IsUnique();
+
+                    b.HasIndex("OrganizationId", "Status", "Classification");
+
+                    b.ToTable("loan_templates", (string)null);
+                });
+
+            modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.LoanTemplates.LoanTemplateVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AllowedPercentagesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Classification")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("LoanTemplateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("MaxLoanDays")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("MaxPrincipalAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<DateTimeOffset>("RecordedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RecordedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordedByUserId");
+
+                    b.HasIndex("LoanTemplateId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("loan_template_versions", (string)null);
+                });
+
             modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.Routes.AdministrativeAuditRecord", b =>
                 {
                     b.Property<Guid>("Id")
@@ -578,6 +715,42 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.LoanTemplates.LoanTemplate", b =>
+                {
+                    b.HasOne("MS.Cobroup.BackendAdmin.Domain.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MS.Cobroup.BackendAdmin.Domain.Identity.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MS.Cobroup.BackendAdmin.Domain.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.LoanTemplates.LoanTemplateVersion", b =>
+                {
+                    b.HasOne("MS.Cobroup.BackendAdmin.Domain.LoanTemplates.LoanTemplate", null)
+                        .WithMany("Versions")
+                        .HasForeignKey("LoanTemplateId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MS.Cobroup.BackendAdmin.Domain.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.Routes.AdministrativeAuditRecord", b =>
                 {
                     b.HasOne("MS.Cobroup.BackendAdmin.Domain.Identity.ApplicationUser", null)
@@ -659,6 +832,11 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                     b.Navigation("Application");
 
                     b.Navigation("Authorization");
+                });
+
+            modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.LoanTemplates.LoanTemplate", b =>
+                {
+                    b.Navigation("Versions");
                 });
 
             modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.Routes.CollectionRoute", b =>

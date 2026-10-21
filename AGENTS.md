@@ -4,19 +4,19 @@
 
 - Producto: COBROUP
 - Rol: microservicio administrativo por tenant.
-- Documento maestro: `../cobroup.md/COBROUP.md` 1.0.7.
+- Documento maestro: `../cobroup.md/COBROUP.md` 1.0.8.
 - Estándar: `../cobroup.md/FRAMEWORK_DESARROLLO_CSHARP.md` 2.0.
-- Rama requerida y activa: `feature/fase-4-clientes`.
+- Rama requerida y activa: `feature/fase-5-plantillas-excepciones`.
 - Prohibidos push, merge, tag y PR sin autorización.
 
 ## Estado actual
 
-- Fase: 4
-- Resultado: COMPLETADA
+- Fase: 5
+- Resultado: EN_CURSO
 - Plataforma: .NET SDK 10.0.401, `net10.0`, C# 14.
 - Auditoría independiente: no realizada.
-- Línea base: 9 fases totales; 4 completas y 5 pendientes. Informe: `../cobroup.md/informe/avance.md`.
-- Corte actual: fachada administrativa de clientes hacia el backend operativo; build Release 0 warnings/errores; Core 24/24 e Infrastructure 5/5; integración OIDC y fachada verificadas con HTTP 200.
+- Línea base: 9 fases totales; 4 completas, 1 en curso y 4 posteriores. Informe: `../cobroup.md/informe/avance.md`.
+- Corte actual: catálogo tenant-safe de plantillas versionadas; build Release 0 warnings/errores; Core 33/33 e Infrastructure 5/5; migración aplicada de forma idempotente.
 
 ## Historial cronológico (append-only)
 
@@ -111,3 +111,13 @@
 - Integración: validador local reutilizable ejecutó Authorization Code + PKCE sin imprimir secretos; login 204, token 200, API operativa 200 y fachada administrativa 200.
 - Validación: build Release 0 warnings/errores; Core 24/24 e Infrastructure 5/5.
 - Git: commit de fase 4 autorizado; push, merge, tag y PR permanecen prohibidos.
+
+### 2026-10-21 — Inicio de fase 5: catálogo de plantillas
+
+- Rama: `feature/fase-5-plantillas-excepciones`; fase 4 ya comprometida y repositorio limpio al iniciar.
+- Implementación: autoridad tenant-safe de `LoanTemplate` y `LoanTemplateVersion`, clasificación, borrador/publicada/inactiva, límites exactos, porcentajes deduplicados, historial inmutable y auditoría transaccional.
+- Contratos: controlador dedicado `GET|POST /api/v1/loan-templates`, `GET|PUT /api/v1/loan-templates/{id}` y lectura publicada `GET /api/v1/loan-templates/available`.
+- Persistencia: migración `AddLoanTemplateCatalog` aplicada a PostgreSQL; segunda ejecución sin pendientes.
+- Validación: build Release sin advertencias; Core 33/33 e Infrastructure 5/5.
+- Pendiente de fase: solicitudes excepcionales por cliente y decisión exclusiva de Admin; ADR-003 impide anticipar originación o cálculo financiero real.
+- Git: cambios de fase 5 sin commit; push, merge, tag y PR no autorizados.
