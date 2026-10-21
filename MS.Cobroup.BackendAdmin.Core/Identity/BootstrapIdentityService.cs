@@ -13,33 +13,36 @@ public sealed class BootstrapIdentityService(IIdentityRepository repository, IPa
         var organization = Organization.Create(command.OrganizationCode, command.OrganizationName, now);
         var users = new[]
         {
-            CreateUser(organization.Id, command.Administrator, UserRole.Admin, now),
-            CreateUser(organization.Id, command.Supervisor, UserRole.Supervisor, now),
-            CreateUser(organization.Id, command.Collector, UserRole.Collector, now)
+            CreateUser(command.Administrator, now),
+            CreateUser(command.Supervisor, now),
+            CreateUser(command.Collector, now)
         };
         if (users.Select(user => user.NormalizedUsername).Distinct(StringComparer.Ordinal).Count() != users.Length)
         {
-            throw new ArgumentException("Bootstrap usernames must be unique within the organization.", nameof(command));
+            throw new ArgumentException("Bootstrap usernames must be globally unique.", nameof(command));
         }
+
+        var memberships = new[]
+        {
+            OrganizationMembership.Create(users[0].Id, organization.Id, UserRole.Admin, now, markAsAccessed: true),
+            OrganizationMembership.Create(users[1].Id, organization.Id, UserRole.Supervisor, now, markAsAccessed: true),
+            OrganizationMembership.Create(users[2].Id, organization.Id, UserRole.Collector, now, markAsAccessed: true)
+        };
 
         var audit = SecurityAuditRecord.BootstrapCompleted("platform-bootstrap", command.SourceIp, now);
 
-        var created = await repository.TryBootstrapAsync(organization, users, audit, cancellationToken);
+        var created = await repository.TryBootstrapAsync(organization, users, memberships, audit, cancellationToken);
         return created
             ? new BootstrapIdentityResult(true, organization.Id, users.Select(user => user.Id).ToArray())
             : new BootstrapIdentityResult(false, null, []);
 
         ApplicationUser CreateUser(
-            Guid organizationId,
             BootstrapUserCommand user,
-            UserRole role,
             DateTimeOffset createdAtUtc) =>
             ApplicationUser.Create(
-                organizationId,
                 user.Username,
                 user.DisplayName,
                 passwords.Hash(user.Password),
-                role,
                 createdAtUtc);
     }
 }
