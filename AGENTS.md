@@ -4,19 +4,19 @@
 
 - Producto: COBROUP
 - Rol: microservicio administrativo por tenant.
-- Documento maestro: `../cobroup.md/COBROUP.md` 1.0.8.
+- Documento maestro: `../cobroup.md/COBROUP.md` 1.2.0.
 - Estándar: `../cobroup.md/FRAMEWORK_DESARROLLO_CSHARP.md` 2.0.
-- Rama requerida y activa: `feature/fase-5-plantillas-excepciones`.
+- Rama requerida y activa: `feature/fase-6-prestamos-cronograma`.
 - Prohibidos push, merge, tag y PR sin autorización.
 
 ## Estado actual
 
-- Fase: 5
+- Fase: 6
 - Resultado: COMPLETADA_FUNCIONALMENTE
 - Plataforma: .NET SDK 10.0.401, `net10.0`, C# 14.
 - Auditoría independiente: no realizada.
-- Línea base: 9 fases totales; 5 completas funcionalmente, 4 posteriores pendientes. Informe: `../cobroup.md/informe/avance.md`.
-- Corte actual: catálogo versionado y bandeja/auditoría de excepciones completas; build Release 0 warnings/errores; Core 36/36 e Infrastructure 5/5.
+- Línea base: 9 fases totales; 6 completas funcionalmente, 3 posteriores pendientes. Informe: `../cobroup.md/informe/avance.md`.
+- Corte actual: fachada administrativa de auditoría y supervisión de préstamos (`/api/v1/loans`) reservada a Admin; build Release 0 warnings/errores; Core 38/38 e Infrastructure 8/8 (46 pruebas).
 
 ## Historial cronológico (append-only)
 
@@ -129,4 +129,15 @@
 - Auditoría administrativa: `AdministrativeAuditRecord.LoanExceptionDecided` persiste actor, organización, id de excepción y detalle JSON en `IdentityDbContext` con cada decisión exitosa (aprobación/rechazo).
 - Seguridad y autorización (AC-08): verificada la denegación estricta en Core con 403 Forbidden para actores sin rol Admin antes de delegar a la autoridad operativa.
 - Validación: build Release con 0 warnings y 0 errores; suite de pruebas ampliada a Core 36/36 e Infrastructure 8/8 (total 44/44).
-- Git: cambios de fase 5 sin commit; push, merge, tag y PR no autorizados.
+- Git: commit de fase 5 autorizado por el usuario: `b3b8e34` (`feat(loan-exceptions): implement administrative exception decision proxy and audit trail`); push, merge, tag y PR permanecen prohibidos.
+
+### 2026-10-21 — Cierre funcional de fase 6: supervisión administrativa de préstamos
+
+- Fachada administrativa:
+  - Controlador `LoansController` (`/api/v1/loans`) exponiendo búsqueda con filtros de ruta, cliente y estado (`GET /api/v1/loans`), detalle con cronograma de cuotas (`GET /api/v1/loans/{id}`), y consulta por cliente (`GET /api/v1/loans/by-customer/{customerId}`).
+  - Servicio `LoanAdministrationService`: valida autorización exclusiva para rol `Admin` (`actor.Role is UserRole.Admin`) y delega a la autoridad operativa.
+  - Integración desacoplada: `IOperationalLoanDirectory` y `OperationalLoanDirectoryClient` consumiendo la API operativa mediante reenvío del Bearer token sin compartir base de datos.
+- Pruebas automatizadas:
+  - Suite ampliada a 46 pruebas en verde: Core 38/38 e Infrastructure 8/8.
+- Build: Release compilado con 0 warnings y 0 errors (`dotnet build -c Release`).
+- Git: rama `feature/fase-6-prestamos-cronograma` lista para commit de cierre de fase tras autorización del usuario; push, merge, tag y PR no autorizados.
