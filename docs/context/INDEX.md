@@ -2,11 +2,11 @@
 
 ## Propósito
 
-Autoridad administrativa para configuración de organización, rutas, asignaciones, plantillas, medios, etiquetas y aprobación de excepciones. Fase 1 crea únicamente la base ejecutable.
+Autoridad administrativa para configuración de organización, rutas, asignaciones, plantillas, medios, etiquetas y aprobación de excepciones. Fase 3 completa configuración organizacional y rutas; las capacidades posteriores permanecen fuera de alcance.
 
 ## Límites
 
-- Propio: futuras escrituras administrativas y contratos de consulta administrativa.
+- Propio: configuración organizacional, rutas, cupos heredables, asignaciones y sus contratos de consulta/auditoría.
 - No propio: Customer, Loan, Installment, Payment y PaymentEvidence.
 - Consultas operativas de mapas/reportes deberán usar API o proyecciones; nunca escrituras directas en tablas operativas.
 
@@ -18,7 +18,7 @@ Los contratos modelan `user_id`, `tenant_id`, roles canónicos y rutas. `Adminis
 
 - .NET 10 / C# 14, solución `.slnx`, sin `src/`.
 - Health check: `/health`.
-- Persistencia e identidad: pendientes.
+- Persistencia PostgreSQL, identidad OIDC y configuración/rutas: implementadas hasta fase 3.
 - Contratos: [fronteras v1](../contracts/platform-boundaries-v1.md).
 - Decisiones: [fundación](../decisions/0001-phase-1-foundation.md).
 - Roadmap: [propuesta](../roadmap/phase-proposal.md).

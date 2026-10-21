@@ -1,6 +1,8 @@
 # MS.Cobroup.BackendAdmin
 
-Microservicio administrativo y autoridad única de identidad de COBROUP. La fase 2 incorpora organizaciones, usuarios, bootstrap único auditable, PostgreSQL y OpenID Connect Authorization Code + PKCE. No incluye todavía CRUD operativo ni reglas financieras.
+Microservicio administrativo y autoridad única de identidad de COBROUP. Los usuarios son identidades globales y pueden tener membresías con rol en varias organizaciones. El login usa solamente usuario y contraseña, selecciona la última organización accedida y permite cambiarla emitiendo una sesión nueva. La fase 3 completa la configuración tenant-safe de organización, rutas, cupos y asignaciones.
+
+En fase 4 expone `GET|POST /api/v1/customers` y `GET|PUT /api/v1/customers/{id}` como fachada exclusiva para `Admin`; reenvía el token al backend operativo y no escribe sus tablas.
 
 ## Requisitos y ejecución
 
@@ -17,4 +19,4 @@ La conexión se sobrescribe mediante User Secrets con la clave `ConnectionString
 
 El entorno local ya contiene una organización `COBROUP` y un usuario para cada rol: `admin`, `supervisor` y `collector`. Sus contraseñas aleatorias solo existen en User Secrets bajo `LocalBootstrap:AdminPassword`, `LocalBootstrap:SupervisorPassword` y `LocalBootstrap:CollectorPassword`. Pueden consultarse localmente con `dotnet user-secrets list --project MS.Cobroup.BackendAdmin.Api` sin copiarlas a archivos versionados.
 
-Endpoints: `GET /health`, discovery OIDC en `/.well-known/openid-configuration`, sesión de autoridad en `/api/v1/auth/session`, bootstrap en `/api/v1/bootstrap` y protocolo en `/connect/*`. En producción son obligatorios certificados separados de firma y cifrado mediante `Identity__Certificates__*`.
+Endpoints: `GET /health`, discovery OIDC en `/.well-known/openid-configuration`, sesión de autoridad en `/api/v1/auth/session`, organizaciones activas en `/api/v1/auth/organizations`, bootstrap en `/api/v1/bootstrap`, configuración en `GET|PUT /api/v1/organization-settings`, rutas en `GET|POST /api/v1/routes` y `PUT /api/v1/routes/{id}`, catálogo en `GET /api/v1/users/assignable`, lectura operativa filtrada en `GET /api/v1/route-access` y protocolo en `/connect/*`. El tenant siempre procede del token. Las escrituras requieren `Admin`; la lectura operativa filtra rutas activas por administrador, supervisor responsable o cobrador asignado. Todos los endpoints propios están organizados por controladores en la capa API. En producción son obligatorios certificados separados de firma y cifrado mediante `Identity__Certificates__*`.

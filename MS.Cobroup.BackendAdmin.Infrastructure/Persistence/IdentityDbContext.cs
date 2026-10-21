@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MS.Cobroup.BackendAdmin.Domain.Identity;
+using MS.Cobroup.BackendAdmin.Domain.Routes;
+using MS.Cobroup.BackendAdmin.Domain.Configuration;
 
 namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
 
@@ -9,9 +11,19 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
 
     public DbSet<ApplicationUser> Users => Set<ApplicationUser>();
 
+    public DbSet<OrganizationMembership> OrganizationMemberships => Set<OrganizationMembership>();
+
     public DbSet<BootstrapMarker> BootstrapMarkers => Set<BootstrapMarker>();
 
     public DbSet<SecurityAuditRecord> SecurityAuditRecords => Set<SecurityAuditRecord>();
+
+    public DbSet<CollectionRoute> Routes => Set<CollectionRoute>();
+
+    public DbSet<RouteCollectorAssignment> RouteCollectorAssignments => Set<RouteCollectorAssignment>();
+
+    public DbSet<AdministrativeAuditRecord> AdministrativeAuditRecords => Set<AdministrativeAuditRecord>();
+
+    public DbSet<OrganizationSettings> OrganizationSettings => Set<OrganizationSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -35,8 +47,19 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.Property(item => item.NormalizedUsername).HasMaxLength(80).IsRequired();
             entity.Property(item => item.DisplayName).HasMaxLength(160).IsRequired();
             entity.Property(item => item.PasswordHash).HasMaxLength(512).IsRequired();
+            entity.HasIndex(item => item.NormalizedUsername).IsUnique();
+        });
+
+        modelBuilder.Entity<OrganizationMembership>(entity =>
+        {
+            entity.ToTable("organization_memberships");
+            entity.HasKey(item => new { item.UserId, item.OrganizationId });
             entity.Property(item => item.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
-            entity.HasIndex(item => new { item.OrganizationId, item.NormalizedUsername }).IsUnique();
+            entity.HasIndex(item => new { item.UserId, item.LastAccessedAtUtc });
+            entity.HasOne(item => item.User)
+                .WithMany()
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(item => item.Organization)
                 .WithMany()
                 .HasForeignKey(item => item.OrganizationId)
@@ -58,6 +81,85 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.Property(item => item.Actor).HasMaxLength(160).IsRequired();
             entity.Property(item => item.SourceIp).HasMaxLength(64).IsRequired();
             entity.HasIndex(item => item.OccurredAtUtc);
+        });
+
+        modelBuilder.Entity<CollectionRoute>(entity =>
+        {
+            entity.ToTable("routes");
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.Name).HasMaxLength(120).IsRequired();
+            entity.Property(item => item.NormalizedName).HasMaxLength(120).IsRequired();
+            entity.Property(item => item.Description).HasMaxLength(500);
+            entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
+            entity.Property(item => item.MaxActiveCustomersMode).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(item => item.MaxActiveLoansMode).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.HasIndex(item => new { item.OrganizationId, item.NormalizedName }).IsUnique();
+            entity.HasOne<Organization>()
+                .WithMany()
+                .HasForeignKey(item => item.OrganizationId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.SupervisorUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasMany(item => item.CollectorAssignments)
+                .WithOne(item => item.Route)
+                .HasForeignKey(item => item.RouteId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Navigation(item => item.CollectorAssignments)
+                .UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OrganizationSettings>(entity =>
+        {
+            entity.ToTable("organization_settings");
+            entity.HasKey(item => item.OrganizationId);
+            entity.Property(item => item.TimeZoneId).HasMaxLength(100).IsRequired();
+            entity.Property(item => item.CurrencyCode).HasMaxLength(3).IsRequired();
+            entity.HasOne<Organization>()
+                .WithOne()
+                .HasForeignKey<OrganizationSettings>(item => item.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.UpdatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RouteCollectorAssignment>(entity =>
+        {
+            entity.ToTable("route_collector_assignments");
+            entity.HasKey(item => new { item.RouteId, item.CollectorUserId });
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.CollectorUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.AssignedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AdministrativeAuditRecord>(entity =>
+        {
+            entity.ToTable("administrative_audit");
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.EventType).HasMaxLength(96).IsRequired();
+            entity.Property(item => item.EntityType).HasMaxLength(64).IsRequired();
+            entity.Property(item => item.DetailsJson).HasMaxLength(4000);
+            entity.HasIndex(item => new { item.OrganizationId, item.OccurredAtUtc });
+            entity.HasOne<Organization>()
+                .WithMany()
+                .HasForeignKey(item => item.OrganizationId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.ActorUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

@@ -4,17 +4,19 @@
 
 - Producto: COBROUP
 - Rol: microservicio administrativo por tenant.
-- Documento maestro: `../cobroup.md/COBROUP.md` 1.0.1.
+- Documento maestro: `../cobroup.md/COBROUP.md` 1.0.7.
 - Estándar: `../cobroup.md/FRAMEWORK_DESARROLLO_CSHARP.md` 2.0.
-- Rama requerida y activa: `feature/fase-2-identidad-tenant`.
+- Rama requerida y activa: `feature/fase-4-clientes`.
 - Prohibidos push, merge, tag y PR sin autorización.
 
 ## Estado actual
 
-- Fase: 2
+- Fase: 4
 - Resultado: COMPLETADA
 - Plataforma: .NET SDK 10.0.401, `net10.0`, C# 14.
 - Auditoría independiente: no realizada.
+- Línea base: 9 fases totales; 4 completas y 5 pendientes. Informe: `../cobroup.md/informe/avance.md`.
+- Corte actual: fachada administrativa de clientes hacia el backend operativo; build Release 0 warnings/errores; Core 24/24 e Infrastructure 5/5; integración OIDC y fachada verificadas con HTTP 200.
 
 ## Historial cronológico (append-only)
 
@@ -54,3 +56,58 @@
 - Bootstrap confirmado: se creó una sola organización `COBROUP` y exactamente un usuario por rol (`Admin`, `Supervisor`, `Collector`). Las contraseñas quedaron únicamente en User Secrets bajo `LocalBootstrap:*` y no se imprimieron ni versionaron. Un segundo intento devolvió 409, confirmando la ejecución única.
 - Validación integral: para los tres usuarios se verificaron login 204, autorización PKCE 302, token 200, `userinfo` 200 con el rol esperado, rotación de refresh token 200 y revocación 200. Health, discovery, migración repetible y reconciliación de clientes OIDC también quedaron validados.
 - Git: commit de cierre de fase 2 autorizado por el usuario; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Inicio de configuración y rutas, fase 3
+
+- Alcance inicial: alta de ruta con supervisor y uno o más cobradores; tenant derivado del token; autorización `Admin` en API y Core; roles/usuarios activos del mismo tenant; nombre único por organización; auditoría en la misma transacción.
+- Persistencia: entidades de ruta/asignación/auditoría y migración `AddRouteManagement`, aplicada sobre la base local que conserva el bootstrap de fase 2.
+- Validación: build con 0 warnings/errores; Core 9/9 e Infrastructure 3/3; segunda ejecución de migración sin cambios pendientes; API inició correctamente, `/health` respondió 200 y `POST /api/v1/routes` sin token fue rechazado con 401.
+- Pendiente de fase: consultas, edición/desactivación, reasignación, configuración organizacional, cupos/herencias e integración frontend.
+- Git: cambios de fase 3 todavía sin commit; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Orígenes frontend fase 3
+
+- Clientes OIDC locales actualizados: operativo `http://localhost:5200` y administrativo `http://localhost:5300`, conservando coincidencia exacta para callback y cierre de sesión.
+- Git: cambio sin commit; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Pausa y refinamiento de identidad/API
+
+- Decisión: usuario global con username único; pertenencia y rol en `OrganizationMembership`; login sin organización; tenant inicial según `LastAccessedAtUtc`; desempate inicial por incorporación más reciente.
+- Sin membresía activa: la sesión queda identificada sin claims tenant y responde `membership_required`; no se emite token tenant. La solicitud de ingreso se muestra como estado, pero su flujo de aprobación queda pendiente de definición.
+- Cambio de organización: listado y selección protegidos por cookie/antiforgery; actualiza último acceso, reemplaza la sesión de autoridad y el frontend revoca el refresh token anterior antes de reautorizar.
+- API: handlers propios trasladados desde `Program.cs` a `AuthController`, `OrganizationSessionsController`, `OidcController`, `BootstrapController`, `RoutesController` y `HealthController`.
+- Datos: migración `GlobalUsersAndMemberships` aplicada con backfill antes de retirar columnas antiguas; login real del administrador 204, una membresía `COBROUP/Admin` y selección 204.
+- Validación final: build con 0 warnings/errores; Core 11/11 e Infrastructure 3/3; migración repetible sin pendientes; health 200; autorización OIDC aceptada para callback administrativo.
+- Incidencia: una prueba exploratoria posterior con `HttpClient` desde PowerShell falló por construcción local del cliente/formulario; no alteró datos ni secretos. Las validaciones HTTP anteriores y las pruebas automatizadas sí completaron.
+- Git: cambios sin commit; fase 3 funcional pausada; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Checkpoint y reanudación de fase 3
+
+- Git: checkpoint previo confirmado en `d8885d7` (`feat: establish global memberships and route management`); repositorio limpio tras el commit. Sin push, merge, tag ni PR.
+- Backend: `GET /api/v1/routes` lista solo rutas del tenant del token; `GET /api/v1/users/assignable` expone únicamente membresías activas `Supervisor`/`Collector` del mismo tenant. Ambos requieren `Admin` en API y Core.
+- Diseño: cada responsabilidad conserva controlador propio (`RoutesController`, `UsersController`); la extracción de actor tenant se centralizó en `TenantActorReader`.
+- Pruebas: Core 15/15. Build completo Release con 0 warnings y 0 errores; se usó Release porque una instancia Debug abierta desde Visual Studio bloqueaba sus DLL sin afectar el código.
+- Git: este nuevo corte de fase 3 queda sin commit; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Cierre funcional de fase 3
+
+- Alcance: configuración organizacional; cupos generales opcionales; rutas con herencia/sobrescritura; alta, consulta, edición, desactivación y reasignación; catálogo tenant-safe; lectura operativa por rol/asignación.
+- Seguridad: tenant exclusivamente desde token; escrituras `Admin` en API y Core; rutas operativas activas filtradas para `Admin`, supervisor responsable o cobrador asignado.
+- Auditoría: cambios de configuración y ruta guardan actor/fecha; reasignaciones, estado y cupos conservan detalle JSON antes/después en la misma transacción.
+- Persistencia: migraciones `CompleteRouteConfiguration` y `AddAdministrativeAuditDetails` aplicadas; segunda ejecución confirmó base actualizada.
+- Validación: build Release 0 warnings/errores; Core 22/22 e Infrastructure 3/3; integración OIDC real con login 204, autorización 302, token 200 y lecturas administrativas/operativas 200. No se crearon rutas ficticias.
+- Dependencias diferidas: orden de clientes y georreferenciación requieren Customer/Location y decisión de mapas, por lo que permanecen en sus fases propietarias.
+- Git: cambios de cierre sin commit; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Consolidación del informe de avance
+
+- Documentación: el maestro 1.0.5 formaliza 9 fases totales, 3 completas y 6 pendientes; el detalle se publicó en `../cobroup.md/informe/avance.md` y `avance.html`.
+- Roadmap: numeración sincronizada de fases 2–9, sin ampliar ni autorizar alcance funcional.
+- Git: no se creó commit, push, merge, tag ni PR.
+
+### 2026-10-21 — Cierre funcional de fase 4
+
+- API: fachada administrativa de clientes con controlador propio; consulta, detalle, traslado de ruta y cambio de estado reservados a `Admin`, sin duplicar persistencia operativa.
+- Integración: validador local reutilizable ejecutó Authorization Code + PKCE sin imprimir secretos; login 204, token 200, API operativa 200 y fachada administrativa 200.
+- Validación: build Release 0 warnings/errores; Core 24/24 e Infrastructure 5/5.
+- Git: commit de fase 4 autorizado; push, merge, tag y PR permanecen prohibidos.

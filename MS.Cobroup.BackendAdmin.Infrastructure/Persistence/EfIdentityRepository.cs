@@ -11,6 +11,7 @@ public sealed class EfIdentityRepository(IdentityDbContext dbContext) : IIdentit
     public async Task<bool> TryBootstrapAsync(
         Organization organization,
         IReadOnlyCollection<ApplicationUser> users,
+        IReadOnlyCollection<OrganizationMembership> memberships,
         SecurityAuditRecord auditRecord,
         CancellationToken cancellationToken)
     {
@@ -26,6 +27,7 @@ public sealed class EfIdentityRepository(IdentityDbContext dbContext) : IIdentit
         dbContext.Add(BootstrapMarker.Complete(auditRecord.OccurredAtUtc));
         dbContext.Add(organization);
         dbContext.AddRange(users);
+        dbContext.AddRange(memberships);
         dbContext.Add(auditRecord);
 
         try
@@ -43,16 +45,73 @@ public sealed class EfIdentityRepository(IdentityDbContext dbContext) : IIdentit
     }
 
     public Task<ApplicationUser?> FindActiveUserAsync(
-        string organizationCode,
         string normalizedUsername,
         CancellationToken cancellationToken) =>
         dbContext.Users
             .AsNoTracking()
+            .SingleOrDefaultAsync(
+                item => item.NormalizedUsername == normalizedUsername && item.IsActive,
+                cancellationToken);
+
+    public async Task<OrganizationMembership?> SelectMostRecentlyAccessedMembershipAsync(
+        Guid userId,
+        DateTimeOffset accessedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        var membership = await dbContext.OrganizationMemberships
+            .Include(item => item.Organization)
+            .Where(item =>
+                item.UserId == userId
+                && item.IsActive
+                && item.Organization.Status == OrganizationStatus.Active)
+            .OrderByDescending(item => item.LastAccessedAtUtc.HasValue)
+            .ThenByDescending(item => item.LastAccessedAtUtc)
+            .ThenByDescending(item => item.JoinedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (membership is null)
+        {
+            return null;
+        }
+
+        membership.MarkAccessed(accessedAtUtc);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return membership;
+    }
+
+    public async Task<OrganizationMembership?> SelectMembershipAsync(
+        Guid userId,
+        Guid organizationId,
+        DateTimeOffset accessedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        var membership = await dbContext.OrganizationMemberships
+            .Include(item => item.User)
             .Include(item => item.Organization)
             .SingleOrDefaultAsync(
-                item => item.Organization.Code == organizationCode
-                    && item.NormalizedUsername == normalizedUsername
+                item => item.UserId == userId
+                    && item.OrganizationId == organizationId
                     && item.IsActive
                     && item.Organization.Status == OrganizationStatus.Active,
                 cancellationToken);
+        if (membership is null)
+        {
+            return null;
+        }
+
+        membership.MarkAccessed(accessedAtUtc);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return membership;
+    }
+
+    public async Task<IReadOnlyCollection<OrganizationMembership>> ListActiveMembershipsAsync(
+        Guid userId,
+        CancellationToken cancellationToken) =>
+        await dbContext.OrganizationMemberships
+            .AsNoTracking()
+            .Include(item => item.Organization)
+            .Where(item =>
+                item.UserId == userId
+                && item.IsActive
+                && item.Organization.Status == OrganizationStatus.Active)
+            .ToArrayAsync(cancellationToken);
 }
