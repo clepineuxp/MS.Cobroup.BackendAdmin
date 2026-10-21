@@ -13,7 +13,8 @@ public sealed class AdministrativeAuditRecord
         string eventType,
         string entityType,
         Guid entityId,
-        DateTimeOffset occurredAtUtc)
+        DateTimeOffset occurredAtUtc,
+        string? detailsJson)
     {
         Id = id;
         OrganizationId = organizationId;
@@ -22,6 +23,7 @@ public sealed class AdministrativeAuditRecord
         EntityType = entityType;
         EntityId = entityId;
         OccurredAtUtc = occurredAtUtc;
+        DetailsJson = detailsJson;
     }
 
     public Guid Id { get; private set; }
@@ -38,10 +40,27 @@ public sealed class AdministrativeAuditRecord
 
     public DateTimeOffset OccurredAtUtc { get; private set; }
 
+    public string? DetailsJson { get; private set; }
+
     public static AdministrativeAuditRecord RouteCreated(
         Guid organizationId,
         Guid actorUserId,
         Guid routeId,
         DateTimeOffset occurredAtUtc) =>
-        new(Guid.NewGuid(), organizationId, actorUserId, "route.created", "route", routeId, occurredAtUtc);
+        new(Guid.NewGuid(), organizationId, actorUserId, "route.created", "route", routeId, occurredAtUtc, null);
+
+    public static AdministrativeAuditRecord RouteUpdated(
+        Guid organizationId,
+        Guid actorUserId,
+        Guid routeId,
+        DateTimeOffset occurredAtUtc,
+        string detailsJson) =>
+        new(Guid.NewGuid(), organizationId, actorUserId, "route.updated", "route", routeId, occurredAtUtc, detailsJson);
+
+    public static AdministrativeAuditRecord OrganizationSettingsUpdated(
+        Guid organizationId,
+        Guid actorUserId,
+        DateTimeOffset occurredAtUtc,
+        string detailsJson) =>
+        new(Guid.NewGuid(), organizationId, actorUserId, "organization.settings.updated", "organization_settings", organizationId, occurredAtUtc, detailsJson);
 }

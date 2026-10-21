@@ -5,8 +5,10 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using MS.Cobroup.BackendAdmin.Api.Security;
 using MS.Cobroup.BackendAdmin.Core.Identity;
+using MS.Cobroup.BackendAdmin.Core.Configuration;
 using MS.Cobroup.BackendAdmin.Core.Routes;
 using MS.Cobroup.BackendAdmin.Core.Services;
+using MS.Cobroup.BackendAdmin.Core.Users;
 using MS.Cobroup.BackendAdmin.Domain.Authorization;
 using MS.Cobroup.BackendAdmin.Domain.Interfaces.Services;
 using MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
@@ -32,6 +34,14 @@ builder.Services.AddAuthorization(options =>
         policy.RequireAuthenticatedUser();
         policy.RequireRole(UserRole.Admin.ToString());
         policy.RequireClaim("organization_id");
+    });
+    options.AddPolicy("tenant-user", policy =>
+    {
+        policy.AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim(OpenIddictConstants.Claims.Subject);
+        policy.RequireClaim("organization_id");
+        policy.RequireClaim(OpenIddictConstants.Claims.Role);
     });
 });
 builder.Services.AddAntiforgery(options =>
@@ -137,6 +147,8 @@ builder.Services.AddOpenIddict()
 
 builder.Services.AddScoped<IIdentityRepository, EfIdentityRepository>();
 builder.Services.AddScoped<IRouteManagementRepository, EfRouteManagementRepository>();
+builder.Services.AddScoped<IUserDirectoryRepository, EfUserDirectoryRepository>();
+builder.Services.AddScoped<IOrganizationSettingsRepository, EfOrganizationSettingsRepository>();
 builder.Services.AddScoped<IPasswordCredentialService, AspNetPasswordCredentialService>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Identity.IPasswordHasher<object>,
     Microsoft.AspNetCore.Identity.PasswordHasher<object>>();
@@ -144,6 +156,11 @@ builder.Services.AddScoped<BootstrapIdentityService>();
 builder.Services.AddScoped<AuthenticateUserService>();
 builder.Services.AddScoped<OrganizationSessionService>();
 builder.Services.AddScoped<CreateRouteService>();
+builder.Services.AddScoped<ListRoutesService>();
+builder.Services.AddScoped<ListAssignableUsersService>();
+builder.Services.AddScoped<UpdateRouteService>();
+builder.Services.AddScoped<ListAccessibleRoutesService>();
+builder.Services.AddScoped<OrganizationSettingsService>();
 builder.Services.AddSingleton<IAdministrativeScopeAuthorizer, AdministrativeScopeAuthorizer>();
 builder.Services.AddHostedService<OidcClientSeeder>();
 

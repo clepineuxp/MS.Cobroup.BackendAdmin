@@ -4,7 +4,7 @@
 
 - Producto: COBROUP
 - Rol: microservicio administrativo por tenant.
-- Documento maestro: `../cobroup.md/COBROUP.md` 1.0.2.
+- Documento maestro: `../cobroup.md/COBROUP.md` 1.0.5.
 - Estándar: `../cobroup.md/FRAMEWORK_DESARROLLO_CSHARP.md` 2.0.
 - Rama requerida y activa: `feature/fase-3-configuracion-rutas`.
 - Prohibidos push, merge, tag y PR sin autorización.
@@ -12,9 +12,10 @@
 ## Estado actual
 
 - Fase: 3
-- Resultado: EN PROGRESO
+- Resultado: COMPLETADA
 - Plataforma: .NET SDK 10.0.401, `net10.0`, C# 14.
 - Auditoría independiente: no realizada.
+- Línea base: 9 fases totales; 3 completas y 6 pendientes. Informe: `../cobroup.md/informe/avance.md`.
 
 ## Historial cronológico (append-only)
 
@@ -78,3 +79,27 @@
 - Validación final: build con 0 warnings/errores; Core 11/11 e Infrastructure 3/3; migración repetible sin pendientes; health 200; autorización OIDC aceptada para callback administrativo.
 - Incidencia: una prueba exploratoria posterior con `HttpClient` desde PowerShell falló por construcción local del cliente/formulario; no alteró datos ni secretos. Las validaciones HTTP anteriores y las pruebas automatizadas sí completaron.
 - Git: cambios sin commit; fase 3 funcional pausada; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Checkpoint y reanudación de fase 3
+
+- Git: checkpoint previo confirmado en `d8885d7` (`feat: establish global memberships and route management`); repositorio limpio tras el commit. Sin push, merge, tag ni PR.
+- Backend: `GET /api/v1/routes` lista solo rutas del tenant del token; `GET /api/v1/users/assignable` expone únicamente membresías activas `Supervisor`/`Collector` del mismo tenant. Ambos requieren `Admin` en API y Core.
+- Diseño: cada responsabilidad conserva controlador propio (`RoutesController`, `UsersController`); la extracción de actor tenant se centralizó en `TenantActorReader`.
+- Pruebas: Core 15/15. Build completo Release con 0 warnings y 0 errores; se usó Release porque una instancia Debug abierta desde Visual Studio bloqueaba sus DLL sin afectar el código.
+- Git: este nuevo corte de fase 3 queda sin commit; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Cierre funcional de fase 3
+
+- Alcance: configuración organizacional; cupos generales opcionales; rutas con herencia/sobrescritura; alta, consulta, edición, desactivación y reasignación; catálogo tenant-safe; lectura operativa por rol/asignación.
+- Seguridad: tenant exclusivamente desde token; escrituras `Admin` en API y Core; rutas operativas activas filtradas para `Admin`, supervisor responsable o cobrador asignado.
+- Auditoría: cambios de configuración y ruta guardan actor/fecha; reasignaciones, estado y cupos conservan detalle JSON antes/después en la misma transacción.
+- Persistencia: migraciones `CompleteRouteConfiguration` y `AddAdministrativeAuditDetails` aplicadas; segunda ejecución confirmó base actualizada.
+- Validación: build Release 0 warnings/errores; Core 22/22 e Infrastructure 3/3; integración OIDC real con login 204, autorización 302, token 200 y lecturas administrativas/operativas 200. No se crearon rutas ficticias.
+- Dependencias diferidas: orden de clientes y georreferenciación requieren Customer/Location y decisión de mapas, por lo que permanecen en sus fases propietarias.
+- Git: cambios de cierre sin commit; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Consolidación del informe de avance
+
+- Documentación: el maestro 1.0.5 formaliza 9 fases totales, 3 completas y 6 pendientes; el detalle se publicó en `../cobroup.md/informe/avance.md` y `avance.html`.
+- Roadmap: numeración sincronizada de fases 2–9, sin ampliar ni autorizar alcance funcional.
+- Git: no se creó commit, push, merge, tag ni PR.

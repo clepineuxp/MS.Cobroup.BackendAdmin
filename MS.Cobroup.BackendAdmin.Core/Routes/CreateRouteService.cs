@@ -15,7 +15,7 @@ public sealed class CreateRouteService(IRouteManagementRepository repository)
         }
 
         var normalizedName = CollectionRoute.NormalizeName(command.Name);
-        if (await repository.NameExistsAsync(command.Actor.OrganizationId, normalizedName, cancellationToken))
+        if (await repository.NameExistsAsync(command.Actor.OrganizationId, normalizedName, null, cancellationToken))
         {
             return CreateRouteResult.Conflict("A route with this name already exists in the organization.");
         }
@@ -54,7 +54,11 @@ public sealed class CreateRouteService(IRouteManagementRepository repository)
             command.SupervisorUserId,
             command.CollectorUserIds,
             command.Actor.UserId,
-            now);
+            now,
+            command.MaxActiveCustomersMode,
+            command.MaxActiveCustomersOverride,
+            command.MaxActiveLoansMode,
+            command.MaxActiveLoansOverride);
         var audit = AdministrativeAuditRecord.RouteCreated(
             command.Actor.OrganizationId,
             command.Actor.UserId,
@@ -75,7 +79,11 @@ public sealed record CreateRouteCommand(
     string Name,
     string? Description,
     Guid SupervisorUserId,
-    IReadOnlyCollection<Guid> CollectorUserIds);
+    IReadOnlyCollection<Guid> CollectorUserIds,
+    RouteSettingMode MaxActiveCustomersMode = RouteSettingMode.Inherited,
+    int? MaxActiveCustomersOverride = null,
+    RouteSettingMode MaxActiveLoansMode = RouteSettingMode.Inherited,
+    int? MaxActiveLoansOverride = null);
 
 public enum CreateRouteOutcome
 {

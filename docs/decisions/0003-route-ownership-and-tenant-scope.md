@@ -2,7 +2,7 @@
 
 ## Estado
 
-Aceptada para el corte inicial de fase 3 (2026-10-21).
+Aceptada y completada para fase 3 (2026-10-21).
 
 ## Decisión
 
@@ -13,12 +13,14 @@ Aceptada para el corte inicial de fase 3 (2026-10-21).
 - El nombre normalizado es único dentro de la organización, no globalmente.
 - La ruta, sus asignaciones y el evento `route.created` se guardan en la misma transacción.
 
-## Alcance de este corte
+## Alcance completado
 
-Incluye el alta segura de una ruta, su persistencia, migración y pruebas de autorización/aislamiento. Edición, desactivación, reasignación, consulta, cupos, herencia de parámetros y georreferenciación quedan para cortes posteriores de la misma fase.
+Incluye alta, consulta, edición, desactivación, reasignación, configuración organizacional y cupos de clientes/préstamos con modos `Inherited` y `Overridden`. Las reasignaciones y cambios de estado/cupo conservan antes/después en auditoría. El contrato operativo expone únicamente rutas activas: todas para `Admin`, supervisadas para `Supervisor` y asignadas para `Collector`.
+
+La selección/orden de clientes y la asistencia geográfica no forman parte de esta fase porque requieren primero las entidades Customer/Location y la decisión del proveedor de mapas. Se mantienen en sus fases dependientes; no son una configuración de ruta implementable de forma íntegra sin esos datos.
 
 ## Consecuencias
 
 - AC-03 comienza con defensa tanto en la política HTTP como en Core.
 - No se crean rutas de ejemplo en el bootstrap: la organización y los usuarios base permanecen separados de los datos operativos.
-- Los contratos de consulta se definirán antes de integrar el frontend administrativo.
+- Los contratos administrativos y operativos quedaron integrados con ambos frontend.

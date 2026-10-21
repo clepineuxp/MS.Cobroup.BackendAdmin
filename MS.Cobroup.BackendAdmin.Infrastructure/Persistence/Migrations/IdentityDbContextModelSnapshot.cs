@@ -22,6 +22,40 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.Configuration.OrganizationSettings", b =>
+                {
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<int?>("MaxActiveCustomersPerRoute")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("MaxActiveLoansPerRoute")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UpdatedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("OrganizationId");
+
+                    b.HasIndex("UpdatedByUserId");
+
+                    b.ToTable("organization_settings", (string)null);
+                });
+
             modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.Identity.ApplicationUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -179,6 +213,10 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("ActorUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("DetailsJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
                     b.Property<Guid>("EntityId")
                         .HasColumnType("uuid");
 
@@ -222,6 +260,22 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
+
+                    b.Property<string>("MaxActiveCustomersMode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int?>("MaxActiveCustomersOverride")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("MaxActiveLoansMode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int?>("MaxActiveLoansOverride")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -488,6 +542,21 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                     b.HasIndex("ApplicationId", "Status", "Subject", "Type");
 
                     b.ToTable("OpenIddictTokens", (string)null);
+                });
+
+            modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.Configuration.OrganizationSettings", b =>
+                {
+                    b.HasOne("MS.Cobroup.BackendAdmin.Domain.Identity.Organization", null)
+                        .WithOne()
+                        .HasForeignKey("MS.Cobroup.BackendAdmin.Domain.Configuration.OrganizationSettings", "OrganizationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MS.Cobroup.BackendAdmin.Domain.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("MS.Cobroup.BackendAdmin.Domain.Identity.OrganizationMembership", b =>

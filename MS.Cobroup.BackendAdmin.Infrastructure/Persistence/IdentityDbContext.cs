@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using MS.Cobroup.BackendAdmin.Domain.Identity;
 using MS.Cobroup.BackendAdmin.Domain.Routes;
+using MS.Cobroup.BackendAdmin.Domain.Configuration;
 
 namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
 
@@ -21,6 +22,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
     public DbSet<RouteCollectorAssignment> RouteCollectorAssignments => Set<RouteCollectorAssignment>();
 
     public DbSet<AdministrativeAuditRecord> AdministrativeAuditRecords => Set<AdministrativeAuditRecord>();
+
+    public DbSet<OrganizationSettings> OrganizationSettings => Set<OrganizationSettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -88,6 +91,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.Property(item => item.NormalizedName).HasMaxLength(120).IsRequired();
             entity.Property(item => item.Description).HasMaxLength(500);
             entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
+            entity.Property(item => item.MaxActiveCustomersMode).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(item => item.MaxActiveLoansMode).HasConversion<string>().HasMaxLength(16).IsRequired();
             entity.HasIndex(item => new { item.OrganizationId, item.NormalizedName }).IsUnique();
             entity.HasOne<Organization>()
                 .WithMany()
@@ -107,6 +112,22 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
                 .OnDelete(DeleteBehavior.Cascade);
             entity.Navigation(item => item.CollectorAssignments)
                 .UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<OrganizationSettings>(entity =>
+        {
+            entity.ToTable("organization_settings");
+            entity.HasKey(item => item.OrganizationId);
+            entity.Property(item => item.TimeZoneId).HasMaxLength(100).IsRequired();
+            entity.Property(item => item.CurrencyCode).HasMaxLength(3).IsRequired();
+            entity.HasOne<Organization>()
+                .WithOne()
+                .HasForeignKey<OrganizationSettings>(item => item.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.UpdatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<RouteCollectorAssignment>(entity =>
@@ -129,6 +150,7 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.HasKey(item => item.Id);
             entity.Property(item => item.EventType).HasMaxLength(96).IsRequired();
             entity.Property(item => item.EntityType).HasMaxLength(64).IsRequired();
+            entity.Property(item => item.DetailsJson).HasMaxLength(4000);
             entity.HasIndex(item => new { item.OrganizationId, item.OccurredAtUtc });
             entity.HasOne<Organization>()
                 .WithMany()

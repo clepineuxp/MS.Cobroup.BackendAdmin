@@ -94,9 +94,15 @@ public sealed class CreateRouteServiceTests
 
         public AdministrativeAuditRecord? Audit { get; private set; }
 
+        public Task<IReadOnlyCollection<RouteSummary>> ListAsync(
+            Guid organizationId,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyCollection<RouteSummary>>([]);
+
         public Task<bool> NameExistsAsync(
             Guid organizationId,
             string normalizedName,
+            Guid? excludedRouteId,
             CancellationToken cancellationToken) =>
             Task.FromResult(ExistingNames.Contains(normalizedName));
 
@@ -120,5 +126,14 @@ public sealed class CreateRouteServiceTests
             Audit = auditRecord;
             return Task.FromResult(true);
         }
+
+        public Task<CollectionRoute?> FindAsync(Guid organizationId, Guid routeId, CancellationToken cancellationToken) =>
+            Task.FromResult<CollectionRoute?>(null);
+
+        public Task<bool> SaveChangesAsync(AdministrativeAuditRecord auditRecord, CancellationToken cancellationToken) =>
+            Task.FromResult(true);
+
+        public Task<IReadOnlyCollection<AccessibleRouteSummary>> ListAccessibleAsync(Guid organizationId, Guid userId, UserRole role, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyCollection<AccessibleRouteSummary>>([]);
     }
 }
