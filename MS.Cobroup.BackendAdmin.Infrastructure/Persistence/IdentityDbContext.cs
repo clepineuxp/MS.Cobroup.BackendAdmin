@@ -3,6 +3,7 @@ using MS.Cobroup.BackendAdmin.Domain.Identity;
 using MS.Cobroup.BackendAdmin.Domain.Routes;
 using MS.Cobroup.BackendAdmin.Domain.Configuration;
 using MS.Cobroup.BackendAdmin.Domain.LoanTemplates;
+using MS.Cobroup.BackendAdmin.Domain.PaymentMethods;
 
 namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
 
@@ -29,6 +30,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
     public DbSet<LoanTemplate> LoanTemplates => Set<LoanTemplate>();
 
     public DbSet<LoanTemplateVersion> LoanTemplateVersions => Set<LoanTemplateVersion>();
+
+    public DbSet<PaymentMethod> PaymentMethods => Set<PaymentMethod>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -215,6 +218,20 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.HasOne<ApplicationUser>()
                 .WithMany()
                 .HasForeignKey(item => item.RecordedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PaymentMethod>(entity =>
+        {
+            entity.ToTable("payment_methods");
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.Name).HasMaxLength(50).IsRequired();
+            entity.Property(item => item.NormalizedName).HasMaxLength(50).IsRequired();
+            entity.HasIndex(item => new { item.OrganizationId, item.NormalizedName }).IsUnique();
+            entity.HasIndex(item => new { item.OrganizationId, item.DisplayOrder });
+            entity.HasOne<Organization>()
+                .WithMany()
+                .HasForeignKey(item => item.OrganizationId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

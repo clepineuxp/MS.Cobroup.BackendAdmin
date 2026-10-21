@@ -1,7 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using MS.Cobroup.BackendAdmin.Domain.Identity;
-using MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
+using MS.Cobroup.BackendAdmin.Domain.PaymentMethods;
 using MS.Cobroup.BackendAdmin.Domain.Routes;
+using MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
 
 namespace MS.Cobroup.BackendAdmin.Infrastructure.Tests.Persistence;
 
@@ -47,5 +48,21 @@ public sealed class IdentityModelTests
         Assert.Equal(
             [nameof(RouteCollectorAssignment.RouteId), nameof(RouteCollectorAssignment.CollectorUserId)],
             primaryKey!.Properties.Select(property => property.Name));
+    }
+
+    [Fact]
+    public void PaymentMethodModel_EnforcesTenantAndNormalizedNameUniqueness()
+    {
+        var builder = new DbContextOptionsBuilder<IdentityDbContext>();
+        builder.UseNpgsql("Host=localhost;Database=model_test;Username=model_test");
+        builder.UseOpenIddict<Guid>();
+        using var context = new IdentityDbContext(builder.Options);
+        var paymentMethod = context.Model.FindEntityType(typeof(PaymentMethod));
+
+        var uniqueIndex = Assert.Single(paymentMethod!.GetIndexes(), index =>
+            index.Properties.Select(property => property.Name)
+                .SequenceEqual([nameof(PaymentMethod.OrganizationId), nameof(PaymentMethod.NormalizedName)]));
+
+        Assert.True(uniqueIndex.IsUnique);
     }
 }

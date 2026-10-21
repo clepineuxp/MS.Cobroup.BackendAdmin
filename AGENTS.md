@@ -4,19 +4,19 @@
 
 - Producto: COBROUP
 - Rol: microservicio administrativo por tenant.
-- Documento maestro: `../cobroup.md/COBROUP.md` 1.2.0.
+- Documento maestro: `../cobroup.md/COBROUP.md` 1.3.0.
 - Estándar: `../cobroup.md/FRAMEWORK_DESARROLLO_CSHARP.md` 2.0.
-- Rama requerida y activa: `feature/fase-6-prestamos-cronograma`.
+- Rama requerida y activa: `feature/fase-7-pagos-conciliacion`.
 - Prohibidos push, merge, tag y PR sin autorización.
 
 ## Estado actual
 
-- Fase: 6
+- Fase: 7
 - Resultado: COMPLETADA_FUNCIONALMENTE
 - Plataforma: .NET SDK 10.0.401, `net10.0`, C# 14.
 - Auditoría independiente: no realizada.
-- Línea base: 9 fases totales; 6 completas funcionalmente, 3 posteriores pendientes. Informe: `../cobroup.md/informe/avance.md`.
-- Corte actual: fachada administrativa de auditoría y supervisión de préstamos (`/api/v1/loans`) reservada a Admin; build Release 0 warnings/errores; Core 38/38 e Infrastructure 8/8 (46 pruebas).
+- Línea base: 9 fases totales; 7 completas funcionalmente, 2 posteriores pendientes. Informe: `../cobroup.md/informe/avance.md`.
+- Corte actual: catálogo y gestión de medios de pago autorizados (AC-13); entidad `PaymentMethod`, repositorio `EfPaymentMethodRepository`, migración EF `20261021215708_AddPaymentMethods` aplicada a PostgreSQL, `PaymentMethodsController` reservado a Admin y lectura pública de disponibles; validación estricta de FRAMEWORK_DESARROLLO_CSHARP 2.0; build Release 0 warnings/errores; Core 47/47 e Infrastructure 9/9 (56 pruebas en verde).
 
 ## Historial cronológico (append-only)
 
@@ -138,6 +138,24 @@
   - Servicio `LoanAdministrationService`: valida autorización exclusiva para rol `Admin` (`actor.Role is UserRole.Admin`) y delega a la autoridad operativa.
   - Integración desacoplada: `IOperationalLoanDirectory` y `OperationalLoanDirectoryClient` consumiendo la API operativa mediante reenvío del Bearer token sin compartir base de datos.
 - Pruebas automatizadas:
-  - Suite ampliada a 46 pruebas en verde: Core 38/38 e Infrastructure 8/8.
-- Build: Release compilado con 0 warnings y 0 errors (`dotnet build -c Release`).
-- Git: rama `feature/fase-6-prestamos-cronograma` lista para commit de cierre de fase tras autorización del usuario; push, merge, tag y PR no autorizados.
+  - Build: Release compilado con 0 warnings y 0 errors (`dotnet build -c Release`).
+- Git: commit local `57d45d7` (`feat(loans): implement administrative loan supervision and audit proxy`) en rama `feature/fase-6-prestamos-cronograma`; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Cierre funcional de fase 7: catálogo y gestión de medios de pago
+
+- Dominio y reglas de negocio:
+  - Entidad `PaymentMethod` en `MS.Cobroup.BackendAdmin.Domain.PaymentMethods`: `OrganizationId`, `Name`, `NormalizedName`, `DisplayOrder`, `IsActive`, timestamps de auditoría.
+  - Reglas: nombre obligatorio de 1 a 50 caracteres, unicidad por organización ignorando mayúsculas y acentos (`NormalizedName`), orden de visualización de 1 a 999.
+  - Autoridad de administración: reservada exclusivamente al rol `Admin` (AC-13); cobradores y supervisores pueden consultar métodos activos mediante `/available`.
+- Persistencia y base de datos:
+  - Mapeo EF Core en `IdentityDbContext` dentro de la tabla `identity.payment_methods` con índice único sobre `(OrganizationId, NormalizedName)` y clave foránea a `organizations`.
+  - Repositorio `EfPaymentMethodRepository` implementando `IPaymentMethodRepository`.
+  - Migración EF Core `20261021215708_AddPaymentMethods` generada y aplicada exitosamente en PostgreSQL.
+- API y controladores:
+  - `PaymentMethodsController` (`/api/v1/payment-methods`): `GET /` (listado administrativo completo), `GET /available` (listado de medios activos para usuarios del tenant), `GET /{id}`, `POST /` (creación con auditoría), `PUT /{id}` (actualización con auditoría), `POST /{id}/toggle-status` (activación/desactivación reactiva).
+  - Auditoría administrativa: `AdministrativeAuditRecord.PaymentMethodModified` registra actor, organización, id del medio y detalle JSON del cambio en `identity.administrative_audits`.
+- Pruebas automatizadas:
+  - Suite ampliada a 56 pruebas en verde: Core 47/47 (7 pruebas unitarias nuevas para `PaymentMethodService`: listado, duplicados, orden, toggle de estado, control de rol Admin) e Infrastructure 9/9 (metamodelo EF Core, unicidad por organización y nombre normalizado).
+- Validación de arquitectura: cumplimiento estricto de FRAMEWORK_DESARROLLO_CSHARP 2.0 (organización hexagonal, límites de dominio, controllers delgados y persistencia desacoplada).
+- Build: Release compilado con 0 warnings y 0 errors.
+- Git: rama `feature/fase-7-pagos-conciliacion`; push, merge, tag y PR no autorizados.

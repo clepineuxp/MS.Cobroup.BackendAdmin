@@ -8,6 +8,7 @@ using MS.Cobroup.BackendAdmin.Core.Identity;
 using MS.Cobroup.BackendAdmin.Core.LoanExceptions;
 using MS.Cobroup.BackendAdmin.Core.Loans;
 using MS.Cobroup.BackendAdmin.Core.LoanTemplates;
+using MS.Cobroup.BackendAdmin.Core.PaymentMethods;
 using MS.Cobroup.BackendAdmin.Core.Configuration;
 using MS.Cobroup.BackendAdmin.Core.Customers;
 using MS.Cobroup.BackendAdmin.Core.Routes;
@@ -173,6 +174,8 @@ builder.Services.AddScoped<CustomerAdministrationService>();
 builder.Services.AddScoped<LoanTemplateService>();
 builder.Services.AddScoped<ILoanExceptionAuditRepository, EfLoanExceptionAuditRepository>();
 builder.Services.AddScoped<LoanExceptionAdministrationService>();
+builder.Services.AddScoped<IPaymentMethodRepository, EfPaymentMethodRepository>();
+builder.Services.AddScoped<PaymentMethodService>();
 builder.Services.AddHttpClient<IOperationalCustomerDirectory, OperationalCustomerDirectoryClient>((services, client) =>
 {
     var configuration = services.GetRequiredService<IConfiguration>();
