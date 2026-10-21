@@ -1,6 +1,6 @@
 # MS.Cobroup.BackendAdmin
 
-Microservicio administrativo de COBROUP. La fase 1 contiene solo la base hexagonal, un contrato inicial de autorización administrativa y un health check; no incluye CRUD ni persistencia.
+Microservicio administrativo y autoridad única de identidad de COBROUP. La fase 2 incorpora organizaciones, usuarios, bootstrap único auditable, PostgreSQL y OpenID Connect Authorization Code + PKCE. No incluye todavía CRUD operativo ni reglas financieras.
 
 ## Requisitos y ejecución
 
@@ -8,7 +8,13 @@ Microservicio administrativo de COBROUP. La fase 1 contiene solo la base hexagon
 dotnet restore MS.Cobroup.BackendAdmin.slnx
 dotnet build MS.Cobroup.BackendAdmin.slnx --no-restore
 dotnet test MS.Cobroup.BackendAdmin.slnx --no-build
-dotnet run --project MS.Cobroup.BackendAdmin.Api --urls http://127.0.0.1:5082
+dotnet tool restore
+dotnet dotnet-ef database update --project MS.Cobroup.BackendAdmin.Infrastructure --startup-project MS.Cobroup.BackendAdmin.Api
+dotnet run --project MS.Cobroup.BackendAdmin.Api --launch-profile https
 ```
 
-El endpoint técnico es `GET /health`. La identidad real y las APIs administrativas requieren decisiones posteriores.
+La conexión se sobrescribe mediante User Secrets con la clave `ConnectionStrings:IdentityDatabase`; la contraseña no está versionada. Para crear o reconciliar los clientes OIDC tras aplicar la migración, establece temporalmente `Identity__SeedClientsOnStartup=true`. El bootstrap requiere `Bootstrap__Key` y el encabezado `X-Bootstrap-Key`; la marca persistida impide una segunda ejecución.
+
+El entorno local ya contiene una organización `COBROUP` y un usuario para cada rol: `admin`, `supervisor` y `collector`. Sus contraseñas aleatorias solo existen en User Secrets bajo `LocalBootstrap:AdminPassword`, `LocalBootstrap:SupervisorPassword` y `LocalBootstrap:CollectorPassword`. Pueden consultarse localmente con `dotnet user-secrets list --project MS.Cobroup.BackendAdmin.Api` sin copiarlas a archivos versionados.
+
+Endpoints: `GET /health`, discovery OIDC en `/.well-known/openid-configuration`, sesión de autoridad en `/api/v1/auth/session`, bootstrap en `/api/v1/bootstrap` y protocolo en `/connect/*`. En producción son obligatorios certificados separados de firma y cifrado mediante `Identity__Certificates__*`.
