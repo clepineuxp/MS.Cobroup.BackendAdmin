@@ -2,6 +2,8 @@
 
 Microservicio administrativo y autoridad única de identidad de COBROUP. Los usuarios son identidades globales y pueden tener membresías con rol en varias organizaciones. El login usa solamente usuario y contraseña, selecciona la última organización accedida y permite cambiarla emitiendo una sesión nueva. La fase 3 completa la configuración tenant-safe de organización, rutas, cupos y asignaciones.
 
+En fase 4 expone `GET|POST /api/v1/customers` y `GET|PUT /api/v1/customers/{id}` como fachada exclusiva para `Admin`; reenvía el token al backend operativo y no escribe sus tablas.
+
 ## Requisitos y ejecución
 
 ```powershell

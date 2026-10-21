@@ -6,12 +6,14 @@ using Microsoft.EntityFrameworkCore;
 using MS.Cobroup.BackendAdmin.Api.Security;
 using MS.Cobroup.BackendAdmin.Core.Identity;
 using MS.Cobroup.BackendAdmin.Core.Configuration;
+using MS.Cobroup.BackendAdmin.Core.Customers;
 using MS.Cobroup.BackendAdmin.Core.Routes;
 using MS.Cobroup.BackendAdmin.Core.Services;
 using MS.Cobroup.BackendAdmin.Core.Users;
 using MS.Cobroup.BackendAdmin.Domain.Authorization;
 using MS.Cobroup.BackendAdmin.Domain.Interfaces.Services;
 using MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
+using MS.Cobroup.BackendAdmin.Infrastructure.Customers;
 using MS.Cobroup.BackendAdmin.Infrastructure.Security;
 using OpenIddict.Abstractions;
 using OpenIddict.Validation.AspNetCore;
@@ -161,6 +163,15 @@ builder.Services.AddScoped<ListAssignableUsersService>();
 builder.Services.AddScoped<UpdateRouteService>();
 builder.Services.AddScoped<ListAccessibleRoutesService>();
 builder.Services.AddScoped<OrganizationSettingsService>();
+builder.Services.AddScoped<CustomerAdministrationService>();
+builder.Services.AddHttpClient<IOperationalCustomerDirectory, OperationalCustomerDirectoryClient>((services, client) =>
+{
+    var configuration = services.GetRequiredService<IConfiguration>();
+    var baseUrl = configuration["OperationalApi:BaseUrl"]
+        ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
+    client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddSingleton<IAdministrativeScopeAuthorizer, AdministrativeScopeAuthorizer>();
 builder.Services.AddHostedService<OidcClientSeeder>();
 
