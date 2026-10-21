@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using MS.Cobroup.BackendAdmin.Api.Security;
 using MS.Cobroup.BackendAdmin.Core.Identity;
+using MS.Cobroup.BackendAdmin.Core.LoanExceptions;
 using MS.Cobroup.BackendAdmin.Core.LoanTemplates;
 using MS.Cobroup.BackendAdmin.Core.Configuration;
 using MS.Cobroup.BackendAdmin.Core.Customers;
@@ -15,6 +16,7 @@ using MS.Cobroup.BackendAdmin.Domain.Authorization;
 using MS.Cobroup.BackendAdmin.Domain.Interfaces.Services;
 using MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
 using MS.Cobroup.BackendAdmin.Infrastructure.Customers;
+using MS.Cobroup.BackendAdmin.Infrastructure.LoanExceptions;
 using MS.Cobroup.BackendAdmin.Infrastructure.Security;
 using OpenIddict.Abstractions;
 using OpenIddict.Validation.AspNetCore;
@@ -167,7 +169,17 @@ builder.Services.AddScoped<ListAccessibleRoutesService>();
 builder.Services.AddScoped<OrganizationSettingsService>();
 builder.Services.AddScoped<CustomerAdministrationService>();
 builder.Services.AddScoped<LoanTemplateService>();
+builder.Services.AddScoped<ILoanExceptionAuditRepository, EfLoanExceptionAuditRepository>();
+builder.Services.AddScoped<LoanExceptionAdministrationService>();
 builder.Services.AddHttpClient<IOperationalCustomerDirectory, OperationalCustomerDirectoryClient>((services, client) =>
+{
+    var configuration = services.GetRequiredService<IConfiguration>();
+    var baseUrl = configuration["OperationalApi:BaseUrl"]
+        ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
+    client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddHttpClient<IOperationalLoanExceptionDirectory, OperationalLoanExceptionDirectoryClient>((services, client) =>
 {
     var configuration = services.GetRequiredService<IConfiguration>();
     var baseUrl = configuration["OperationalApi:BaseUrl"]

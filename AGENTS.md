@@ -12,11 +12,11 @@
 ## Estado actual
 
 - Fase: 5
-- Resultado: EN_CURSO
+- Resultado: COMPLETADA_FUNCIONALMENTE
 - Plataforma: .NET SDK 10.0.401, `net10.0`, C# 14.
 - Auditoría independiente: no realizada.
-- Línea base: 9 fases totales; 4 completas, 1 en curso y 4 posteriores. Informe: `../cobroup.md/informe/avance.md`.
-- Corte actual: catálogo tenant-safe de plantillas versionadas; build Release 0 warnings/errores; Core 33/33 e Infrastructure 5/5; migración aplicada de forma idempotente.
+- Línea base: 9 fases totales; 5 completas funcionalmente, 4 posteriores pendientes. Informe: `../cobroup.md/informe/avance.md`.
+- Corte actual: catálogo versionado y bandeja/auditoría de excepciones completas; build Release 0 warnings/errores; Core 36/36 e Infrastructure 5/5.
 
 ## Historial cronológico (append-only)
 
@@ -120,4 +120,13 @@
 - Persistencia: migración `AddLoanTemplateCatalog` aplicada a PostgreSQL; segunda ejecución sin pendientes.
 - Validación: build Release sin advertencias; Core 33/33 e Infrastructure 5/5.
 - Pendiente de fase: solicitudes excepcionales por cliente y decisión exclusiva de Admin; ADR-003 impide anticipar originación o cálculo financiero real.
+- Git: cambios de fase 5 sin commit; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Cierre funcional de fase 5: bandeja y decisión de excepciones
+
+- Fachada administrativa: controlador dedicado `LoanExceptionsController` con endpoints `GET /api/v1/loan-exceptions`, `GET /api/v1/loan-exceptions/{id}` y `POST /api/v1/loan-exceptions/{id}/decision`, restringidos exclusivamente a la política `tenant-admin`.
+- Integración: `OperationalLoanExceptionDirectoryClient` consume la API operativa reenviando el bearer token sin compartir esquemas de base de datos ni duplicar propiedad de datos.
+- Auditoría administrativa: `AdministrativeAuditRecord.LoanExceptionDecided` persiste actor, organización, id de excepción y detalle JSON en `IdentityDbContext` con cada decisión exitosa (aprobación/rechazo).
+- Seguridad y autorización (AC-08): verificada la denegación estricta en Core con 403 Forbidden para actores sin rol Admin antes de delegar a la autoridad operativa.
+- Validación: build Release con 0 warnings y 0 errores; suite de pruebas ampliada a Core 36/36 e Infrastructure 8/8 (total 44/44).
 - Git: cambios de fase 5 sin commit; push, merge, tag y PR no autorizados.
