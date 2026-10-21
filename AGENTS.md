@@ -4,7 +4,7 @@
 
 - Producto: COBROUP
 - Rol: microservicio administrativo por tenant.
-- Documento maestro: `../cobroup.md/COBROUP.md` 1.0.5.
+- Documento maestro: `../cobroup.md/COBROUP.md` 1.0.7.
 - Estándar: `../cobroup.md/FRAMEWORK_DESARROLLO_CSHARP.md` 2.0.
 - Rama requerida y activa: `feature/fase-4-clientes`.
 - Prohibidos push, merge, tag y PR sin autorización.
@@ -12,11 +12,11 @@
 ## Estado actual
 
 - Fase: 4
-- Resultado: EN_CURSO
+- Resultado: COMPLETADA
 - Plataforma: .NET SDK 10.0.401, `net10.0`, C# 14.
 - Auditoría independiente: no realizada.
-- Línea base: 9 fases totales; 3 completas, 1 en curso y 5 pendientes. Informe: `../cobroup.md/informe/avance.md`.
-- Corte actual: fachada administrativa de clientes hacia el backend operativo; build Release 0 warnings/errores; Core 24/24 e Infrastructure 5/5.
+- Línea base: 9 fases totales; 4 completas y 5 pendientes. Informe: `../cobroup.md/informe/avance.md`.
+- Corte actual: fachada administrativa de clientes hacia el backend operativo; build Release 0 warnings/errores; Core 24/24 e Infrastructure 5/5; integración OIDC y fachada verificadas con HTTP 200.
 
 ## Historial cronológico (append-only)
 
@@ -104,3 +104,10 @@
 - Documentación: el maestro 1.0.5 formaliza 9 fases totales, 3 completas y 6 pendientes; el detalle se publicó en `../cobroup.md/informe/avance.md` y `avance.html`.
 - Roadmap: numeración sincronizada de fases 2–9, sin ampliar ni autorizar alcance funcional.
 - Git: no se creó commit, push, merge, tag ni PR.
+
+### 2026-10-21 — Cierre funcional de fase 4
+
+- API: fachada administrativa de clientes con controlador propio; consulta, detalle, traslado de ruta y cambio de estado reservados a `Admin`, sin duplicar persistencia operativa.
+- Integración: validador local reutilizable ejecutó Authorization Code + PKCE sin imprimir secretos; login 204, token 200, API operativa 200 y fachada administrativa 200.
+- Validación: build Release 0 warnings/errores; Core 24/24 e Infrastructure 5/5.
+- Git: commit de fase 4 autorizado; push, merge, tag y PR permanecen prohibidos.
