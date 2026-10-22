@@ -59,12 +59,36 @@ builder.Services.AddAuthorization(options =>
         policy.RequireClaim("organization_id");
     });
 });
+
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? [
+        "http://localhost:5200",
+        "http://localhost:5300",
+        "https://dev.cobroup.com",
+        "https://dev-admin.cobroup.com",
+        "https://qa.cobroup.com",
+        "https://qa-admin.cobroup.com",
+        "https://cobroup.com",
+        "https://admin.cobroup.com"
+    ];
+
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins(allowedOrigins)
+            .AllowCredentials()
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddAntiforgery(options =>
 {
     options.Cookie.Name = "__Host-cobroup-antiforgery";
     options.Cookie.HttpOnly = true;
     options.Cookie.SameSite = SameSiteMode.Strict;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment() ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
     options.Cookie.Path = "/";
     options.HeaderName = "X-XSRF-TOKEN";
 });
@@ -222,6 +246,7 @@ app.Use(async (context, next) =>
     }
 });
 
+app.UseCors();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

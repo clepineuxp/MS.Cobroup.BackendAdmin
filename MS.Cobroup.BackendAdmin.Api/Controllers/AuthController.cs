@@ -107,7 +107,7 @@ public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
     }
 
     [HttpPost("refresh")]
-    [ValidateAntiForgeryToken]
+    [ValidateCobroupAntiForgeryToken]
     [EnableRateLimiting("identity-write")]
     public async Task<IActionResult> Refresh(
         [FromServices] ITokenService tokenService,
@@ -137,7 +137,7 @@ public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
     }
 
     [HttpPost("logout")]
-    [ValidateAntiForgeryToken]
+    [ValidateCobroupAntiForgeryToken]
     [EnableRateLimiting("identity-write")]
     public async Task<IActionResult> Logout(
         [FromServices] ITokenService tokenService,

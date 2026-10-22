@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using MS.Cobroup.BackendAdmin.Api.Security;
 using MS.Cobroup.BackendAdmin.Core.Identity;
 using MS.Cobroup.BackendAdmin.Domain.Interfaces.Services;
 
@@ -28,7 +29,7 @@ public sealed class OrganizationSessionsController(
     }
 
     [HttpPut("current")]
-    [ValidateAntiForgeryToken]
+    [ValidateCobroupAntiForgeryToken]
     [EnableRateLimiting("identity-write")]
     public async Task<IActionResult> Select(
         SelectOrganizationRequest request,

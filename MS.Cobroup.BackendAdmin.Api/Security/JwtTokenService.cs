@@ -213,7 +213,7 @@ public sealed class JwtTokenService(
         var organizationCode = membership.Organization?.Code;
         if (string.IsNullOrWhiteSpace(organizationCode))
         {
-            organizationCode = "DEFAULT";
+            throw new InvalidOperationException("No se puede emitir un access token sin una organización activa y válida asignada a la membresía.");
         }
 
         var claims = new List<Claim>

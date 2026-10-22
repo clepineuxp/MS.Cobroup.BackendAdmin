@@ -12,7 +12,7 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Tests.Persistence;
 
 public sealed class PostgresRefreshTokenConcurrencyTests
 {
-    private readonly string? connectionString;
+    private readonly string connectionString;
 
     public PostgresRefreshTokenConcurrencyTests()
     {
@@ -21,32 +21,21 @@ public sealed class PostgresRefreshTokenConcurrencyTests
             .AddEnvironmentVariables()
             .Build();
 
-        connectionString = config["ConnectionStrings:IdentityDatabase"];
+        connectionString = config["ConnectionStrings:IdentityDatabase"]
+            ?? throw new InvalidOperationException("ConnectionStrings:IdentityDatabase is required for PostgreSQL concurrency tests.");
     }
 
     [Fact]
     public async Task ConcurrentRotation_OnRealPostgreSql_AllowsExactlyOneSuccessAndRevokesOnReplay()
     {
-        if (string.IsNullOrWhiteSpace(connectionString))
-        {
-            // Skip if database connection string is not present in environment
-            return;
-        }
-
         var optionsBuilder = new DbContextOptionsBuilder<IdentityDbContext>();
         optionsBuilder.UseNpgsql(connectionString);
 
         await using var setupContext = new IdentityDbContext(optionsBuilder.Options);
-        try
+        var canConnect = await setupContext.Database.CanConnectAsync();
+        if (!canConnect)
         {
-            if (!await setupContext.Database.CanConnectAsync())
-            {
-                return;
-            }
-        }
-        catch
-        {
-            return;
+            throw new InvalidOperationException($"Cannot connect to PostgreSQL database via '{connectionString}'. Database must be accessible.");
         }
 
         // Setup test data in dev_cobroup_identity
@@ -118,26 +107,38 @@ public sealed class PostgresRefreshTokenConcurrencyTests
 
             var results = await Task.WhenAll(task1, task2);
 
-            // B-05: Exactly one rotation must succeed!
+            // B-05: Exactly one rotation must succeed and one must detect replay!
             var successes = results.Count(r => r);
             var failures = results.Count(r => !r);
 
             Assert.Equal(1, successes);
             Assert.Equal(1, failures);
 
-            // Verify PostgreSQL database state
+            // Verify PostgreSQL database state:
             await using var verifyContext = new IdentityDbContext(optionsBuilder.Options);
             var reloadedInitial = await verifyContext.RefreshTokens.SingleAsync(t => t.TokenHash == initialTokenHash);
+            
+            // Initial token must be marked inactive, revoked and replaced
             Assert.False(reloadedInitial.IsActive);
             Assert.NotNull(reloadedInitial.RevokedAtUtc);
+            Assert.NotNull(reloadedInitial.ReplacedByTokenHash);
 
-            // Exactly 1 new token was created or if second was replay, family was revoked safely
+            // Query all tokens in this family
             var allFamilyTokens = await verifyContext.RefreshTokens
                 .Where(t => t.FamilyId == familyId)
                 .ToListAsync();
 
-            // None of the attempts threw 500 or crashed
-            Assert.NotNull(allFamilyTokens);
+            // Exactly 2 tokens must exist: the parent token and the single winning rotated token
+            Assert.Equal(2, allFamilyTokens.Count);
+
+            // Uniqueness of TokenHash across family tokens
+            var distinctHashes = allFamilyTokens.Select(t => t.TokenHash).Distinct().Count();
+            Assert.Equal(allFamilyTokens.Count, distinctHashes);
+
+            // Because the second concurrent thread detected replay of the consumed parent token,
+            // the entire family was revoked. Zero tokens in the family must remain active!
+            Assert.All(allFamilyTokens, t => Assert.False(t.IsActive));
+            Assert.All(allFamilyTokens, t => Assert.NotNull(t.RevokedAtUtc));
         }
         finally
         {
