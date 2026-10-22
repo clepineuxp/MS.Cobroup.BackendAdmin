@@ -12,7 +12,9 @@ using OpenIddict.Validation.AspNetCore;
 namespace MS.Cobroup.BackendAdmin.Api.Controllers;
 
 [ApiController]
-public sealed class OidcController(IConfiguration configuration) : ControllerBase
+public sealed class OidcController(
+    IConfiguration configuration,
+    IIdentityRepository identityRepository) : ControllerBase
 {
     [AcceptVerbs("GET", "POST")]
     [Route("~/connect/authorize")]
@@ -22,7 +24,15 @@ public sealed class OidcController(IConfiguration configuration) : ControllerBas
             ?? throw new InvalidOperationException("The OpenID Connect request is unavailable.");
         var authentication = await HttpContext.AuthenticateAsync(AuthenticationSchemes.AuthorityCookie);
         var hasOrganization = authentication.Principal?.HasClaim(claim => claim.Type == "organization_id") is true;
-        if (!authentication.Succeeded || authentication.Principal is null || !hasOrganization)
+        
+        Guid.TryParse(authentication.Principal?.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? authentication.Principal?.FindFirstValue(OpenIddictConstants.Claims.Subject), out var userId);
+        Guid.TryParse(authentication.Principal?.FindFirstValue("organization_id"), out var orgId);
+
+        var isActiveMembership = userId != Guid.Empty && orgId != Guid.Empty
+            && (await identityRepository.SelectMembershipAsync(userId, orgId, DateTimeOffset.UtcNow, HttpContext.RequestAborted)) is not null;
+
+        if (!authentication.Succeeded || authentication.Principal is null || !hasOrganization || !isActiveMembership)
         {
             var loginUri = request.ClientId switch
             {
@@ -62,6 +72,82 @@ public sealed class OidcController(IConfiguration configuration) : ControllerBas
         }
 
         return SignIn(principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+    }
+
+    [HttpPost("~/connect/token")]
+    [IgnoreAntiforgeryToken]
+    [Produces("application/json")]
+    public async Task<IActionResult> Exchange()
+    {
+        var request = HttpContext.GetOpenIddictServerRequest()
+            ?? throw new InvalidOperationException("The OpenID Connect request is unavailable.");
+
+        if (request.IsAuthorizationCodeGrantType() || request.IsRefreshTokenGrantType())
+        {
+            var result = await HttpContext.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+            if (!result.Succeeded || result.Principal is null)
+            {
+                return Forbid(
+                    authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                    properties: new AuthenticationProperties(new Dictionary<string, string?>
+                    {
+                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = OpenIddictConstants.Errors.InvalidGrant,
+                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The token is no longer valid."
+                    }));
+            }
+
+            Guid.TryParse(result.Principal.FindFirstValue(OpenIddictConstants.Claims.Subject)
+                ?? result.Principal.FindFirstValue(ClaimTypes.NameIdentifier), out var userId);
+            Guid.TryParse(result.Principal.FindFirstValue("organization_id"), out var orgId);
+
+            if (userId == Guid.Empty || orgId == Guid.Empty)
+            {
+                return Forbid(
+                    authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                    properties: new AuthenticationProperties(new Dictionary<string, string?>
+                    {
+                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = OpenIddictConstants.Errors.InvalidGrant,
+                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The token identity claims are invalid."
+                    }));
+            }
+
+            var membership = await identityRepository.SelectMembershipAsync(
+                userId,
+                orgId,
+                DateTimeOffset.UtcNow,
+                HttpContext.RequestAborted);
+
+            if (membership is null || !membership.IsActive)
+            {
+                return Forbid(
+                    authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+                    properties: new AuthenticationProperties(new Dictionary<string, string?>
+                    {
+                        [OpenIddictServerAspNetCoreConstants.Properties.Error] = OpenIddictConstants.Errors.InvalidGrant,
+                        [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The user or organization is no longer active."
+                    }));
+            }
+
+            // Update role claim if role was changed
+            var identity = (ClaimsIdentity)result.Principal.Identity!;
+            var currentRoleClaim = identity.FindFirst(OpenIddictConstants.Claims.Role);
+            if (currentRoleClaim is not null)
+            {
+                identity.RemoveClaim(currentRoleClaim);
+            }
+            identity.AddClaim(new Claim(OpenIddictConstants.Claims.Role, membership.Role.ToString())
+                .SetDestinations(OpenIddictConstants.Destinations.AccessToken, OpenIddictConstants.Destinations.IdentityToken));
+
+            return SignIn(result.Principal, OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+        }
+
+        return Forbid(
+            authenticationSchemes: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme,
+            properties: new AuthenticationProperties(new Dictionary<string, string?>
+            {
+                [OpenIddictServerAspNetCoreConstants.Properties.Error] = OpenIddictConstants.Errors.UnsupportedGrantType,
+                [OpenIddictServerAspNetCoreConstants.Properties.ErrorDescription] = "The specified grant type is not supported."
+            }));
     }
 
     [AcceptVerbs("GET", "POST")]

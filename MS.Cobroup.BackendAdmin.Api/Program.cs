@@ -151,6 +151,7 @@ builder.Services.AddOpenIddict()
         }
 
         options.UseAspNetCore()
+            .EnableTokenEndpointPassthrough()
             .EnableAuthorizationEndpointPassthrough()
             .EnableEndSessionEndpointPassthrough()
             .EnableUserInfoEndpointPassthrough();
@@ -184,6 +185,9 @@ builder.Services.AddScoped<ILoanExceptionAuditRepository, EfLoanExceptionAuditRe
 builder.Services.AddScoped<LoanExceptionAdministrationService>();
 builder.Services.AddScoped<IPaymentMethodRepository, EfPaymentMethodRepository>();
 builder.Services.AddScoped<PaymentMethodService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
+
 builder.Services.AddHttpClient<IOperationalCustomerDirectory, OperationalCustomerDirectoryClient>((services, client) =>
 {
     var configuration = services.GetRequiredService<IConfiguration>();
@@ -191,7 +195,8 @@ builder.Services.AddHttpClient<IOperationalCustomerDirectory, OperationalCustome
         ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
     client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(10);
-});
+}).AddHttpMessageHandler<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
+
 builder.Services.AddHttpClient<IOperationalLoanExceptionDirectory, OperationalLoanExceptionDirectoryClient>((services, client) =>
 {
     var configuration = services.GetRequiredService<IConfiguration>();
@@ -199,7 +204,8 @@ builder.Services.AddHttpClient<IOperationalLoanExceptionDirectory, OperationalLo
         ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
     client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(10);
-});
+}).AddHttpMessageHandler<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
+
 builder.Services.AddScoped<LoanAdministrationService>();
 builder.Services.AddHttpClient<IOperationalLoanDirectory, OperationalLoanDirectoryClient>((services, client) =>
 {
@@ -208,7 +214,8 @@ builder.Services.AddHttpClient<IOperationalLoanDirectory, OperationalLoanDirecto
         ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
     client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(10);
-});
+}).AddHttpMessageHandler<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
+
 builder.Services.AddScoped<MapSupervisionService>();
 builder.Services.AddScoped<AnalyticsAdministrationService>();
 builder.Services.AddHttpClient<IOperationalAgendaDirectory, OperationalAgendaDirectoryClient>((services, client) =>
@@ -218,28 +225,40 @@ builder.Services.AddHttpClient<IOperationalAgendaDirectory, OperationalAgendaDir
         ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
     client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(10);
-});
+}).AddHttpMessageHandler<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
+
 builder.Services.AddSingleton<IAdministrativeScopeAuthorizer, AdministrativeScopeAuthorizer>();
 builder.Services.AddHostedService<OidcClientSeeder>();
 
 var app = builder.Build();
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+var forwardedOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-});
+};
+forwardedOptions.KnownIPNetworks.Clear();
+forwardedOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedOptions);
 
 app.Use(async (context, next) =>
 {
-    var correlationId = context.Request.Headers["X-Correlation-ID"].FirstOrDefault()
-        ?? Guid.NewGuid().ToString("D");
+    var rawCorrelationId = context.Request.Headers["X-Correlation-ID"].FirstOrDefault();
+    var correlationId = !string.IsNullOrWhiteSpace(rawCorrelationId) && rawCorrelationId.Length <= 64
+        ? rawCorrelationId.Trim()
+        : Guid.NewGuid().ToString("D");
+
+    context.TraceIdentifier = correlationId;
     context.Response.Headers["X-Correlation-ID"] = correlationId;
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["X-Frame-Options"] = "DENY";
     context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
     context.Response.Headers["X-XSS-Protection"] = "0";
 
-    await next();
+    var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Correlation");
+    using (logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId }))
+    {
+        await next();
+    }
 });
 
 app.UseRateLimiter();
@@ -257,15 +276,27 @@ app.Run();
 
 static X509Certificate2 LoadCertificate(IConfiguration configuration, string purpose)
 {
+    var base64 = configuration[$"Identity:Certificates:{purpose}:Base64"];
     var path = configuration[$"Identity:Certificates:{purpose}:Path"];
     var password = configuration[$"Identity:Certificates:{purpose}:Password"];
-    if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(password))
+
+    if (!string.IsNullOrWhiteSpace(base64))
     {
-        throw new InvalidOperationException(
-            $"Identity:Certificates:{purpose}:Path and Password are required outside Development.");
+        var bytes = Convert.FromBase64String(base64.Trim());
+        return string.IsNullOrWhiteSpace(password)
+            ? X509CertificateLoader.LoadPkcs12(bytes, (string?)null)
+            : X509CertificateLoader.LoadPkcs12(bytes, password);
     }
 
-    return X509CertificateLoader.LoadPkcs12FromFile(path, password);
+    if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+    {
+        return string.IsNullOrWhiteSpace(password)
+            ? X509CertificateLoader.LoadPkcs12FromFile(path, (string?)null)
+            : X509CertificateLoader.LoadPkcs12FromFile(path, password);
+    }
+
+    throw new InvalidOperationException(
+        $"Identity:Certificates:{purpose}: either Base64 or an existing file Path is required outside Development.");
 }
 
 public partial class Program;

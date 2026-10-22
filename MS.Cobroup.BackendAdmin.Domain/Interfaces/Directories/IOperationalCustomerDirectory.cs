@@ -1,4 +1,4 @@
-namespace MS.Cobroup.BackendAdmin.Core.Customers;
+namespace MS.Cobroup.BackendAdmin.Domain.Interfaces.Directories;
 
 public interface IOperationalCustomerDirectory
 {

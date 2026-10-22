@@ -59,10 +59,12 @@ public sealed class EfIdentityRepository(IdentityDbContext dbContext) : IIdentit
         CancellationToken cancellationToken)
     {
         var membership = await dbContext.OrganizationMemberships
+            .Include(item => item.User)
             .Include(item => item.Organization)
             .Where(item =>
                 item.UserId == userId
                 && item.IsActive
+                && item.User.IsActive
                 && item.Organization.Status == OrganizationStatus.Active)
             .OrderByDescending(item => item.LastAccessedAtUtc.HasValue)
             .ThenByDescending(item => item.LastAccessedAtUtc)
@@ -91,6 +93,7 @@ public sealed class EfIdentityRepository(IdentityDbContext dbContext) : IIdentit
                 item => item.UserId == userId
                     && item.OrganizationId == organizationId
                     && item.IsActive
+                    && item.User.IsActive
                     && item.Organization.Status == OrganizationStatus.Active,
                 cancellationToken);
         if (membership is null)

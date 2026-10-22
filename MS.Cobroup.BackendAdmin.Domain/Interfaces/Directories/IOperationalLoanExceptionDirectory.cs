@@ -1,4 +1,4 @@
-namespace MS.Cobroup.BackendAdmin.Core.LoanExceptions;
+namespace MS.Cobroup.BackendAdmin.Domain.Interfaces.Directories;
 
 public interface IOperationalLoanExceptionDirectory
 {

@@ -1,7 +1,7 @@
 using MS.Cobroup.BackendAdmin.Domain.Configuration;
 using MS.Cobroup.BackendAdmin.Domain.Routes;
 
-namespace MS.Cobroup.BackendAdmin.Core.Configuration;
+namespace MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
 
 public interface IOrganizationSettingsRepository
 {
