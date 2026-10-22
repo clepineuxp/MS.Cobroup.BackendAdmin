@@ -4,19 +4,19 @@
 
 - Producto: COBROUP
 - Rol: microservicio administrativo por tenant.
-- Documento maestro: `../cobroup.md/COBROUP.md` 1.3.0.
+- Documento maestro: `../cobroup.md/COBROUP.md` 1.5.0.
 - Estándar: `../cobroup.md/FRAMEWORK_DESARROLLO_CSHARP.md` 2.0.
-- Rama requerida y activa: `feature/fase-7-pagos-conciliacion`.
+- Rama requerida y activa: `feature/fase-8-mapas-analitica`.
 - Prohibidos push, merge, tag y PR sin autorización.
 
 ## Estado actual
 
-- Fase: 7
+- Fase: 8
 - Resultado: COMPLETADA_FUNCIONALMENTE
 - Plataforma: .NET SDK 10.0.401, `net10.0`, C# 14.
 - Auditoría independiente: no realizada.
-- Línea base: 9 fases totales; 7 completas funcionalmente, 2 posteriores pendientes. Informe: `../cobroup.md/informe/avance.md`.
-- Corte actual: catálogo y gestión de medios de pago autorizados (AC-13); entidad `PaymentMethod`, repositorio `EfPaymentMethodRepository`, migración EF `20261021215708_AddPaymentMethods` aplicada a PostgreSQL, `PaymentMethodsController` reservado a Admin y lectura pública de disponibles; validación estricta de FRAMEWORK_DESARROLLO_CSHARP 2.0; build Release 0 warnings/errores; Core 47/47 e Infrastructure 9/9 (56 pruebas en verde).
+- Línea base: 9 fases totales; 8 completas funcionalmente, 1 posterior pendiente. Informe: `../cobroup.md/informe/avance.md`.
+- Corte actual: Fase 7 cerrada en Git (`6d563c9`); Fase 8 completada: supervisión administrativa de mapas multi-ruta (`MapSupervisionController`), dashboard ejecutivo de cartera (`AnalyticsController`) con consolidación de Aging Report (0d, 1-7d, 8-15d, 16-30d, >30d), índice PAR% y ranking comparativo de rutas; integración HTTP desacoplada mediante `IOperationalAgendaDirectory` y `OperationalAgendaDirectoryClient`; validación estricta de FRAMEWORK_DESARROLLO_CSHARP 2.0; build Release 0 warnings/errores; Core 51/51 e Infrastructure 9/9 (60 pruebas en verde).
 
 ## Historial cronológico (append-only)
 
@@ -159,3 +159,28 @@
 - Validación de arquitectura: cumplimiento estricto de FRAMEWORK_DESARROLLO_CSHARP 2.0 (organización hexagonal, límites de dominio, controllers delgados y persistencia desacoplada).
 - Build: Release compilado con 0 warnings y 0 errors.
 - Git: rama `feature/fase-7-pagos-conciliacion`; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Cierre versionado de fase 7 en Git
+
+- Prompt: correcto, hacer commits de fase 7 e iniciar fase 8.
+- Resultado: fase 7 validada; commit autorizado: SÍ, commit local `6d563c9` (`feat(payment-methods): implement tenant payment methods catalog and status management`).
+- Rama de trabajo creada y activa: `feature/fase-8-mapas-analitica`.
+- Operaciones no autorizadas: push, merge, tag y PR.
+
+### 2026-10-21 — Implementación de fase 8: mapas, georreferenciación y analítica
+
+- Casos de uso y Core:
+  - `IOperationalAgendaDirectory` en `Core/Agenda`: contrato desacoplado para consulta segura de ubicaciones georreferenciadas y analítica operativa.
+  - `MapSupervisionService`: orquestación de mapa de supervisión multi-ruta con agregación de clientes, préstamos y saldos.
+  - `AnalyticsAdministrationService`: consolidación de analítica ejecutiva, ranking de rendimiento comparativo entre rutas del tenant y reporte global de envejecimiento de cartera (Aging Report).
+- Infraestructura:
+  - `OperationalAgendaDirectoryClient` en `Infrastructure/Agenda`: cliente HTTP autenticado reenviando Bearer token tenant-safe hacia el backend operativo con tolerancia a fallos.
+- API y controladores:
+  - `MapSupervisionController` (`/api/v1/map/route-locations`): endpoint de supervisión de ubicaciones georreferenciadas con filtros por ruta y fecha de corte.
+  - `AnalyticsController` (`/api/v1/analytics`): endpoints `/overview` (resumen ejecutivo), `/routes-performance` (ranking comparativo de rutas) y `/aging` (reporte de vencimiento por tramos).
+  - Registro de servicios en `Program.cs`.
+- Pruebas automatizadas:
+  - Suite ampliada a 60 pruebas en verde: Core 51/51 (pruebas unitarias para `MapSupervisionService` y `AnalyticsAdministrationService`) e Infrastructure 9/9.
+- Validación de arquitectura: cumplimiento estricto de FRAMEWORK_DESARROLLO_CSHARP 2.0 (hexagonal, DTOs explícitos, controllers limpios de lógica).
+- Build: Release compilado con 0 warnings y 0 errors (`dotnet build -c Release`).
+- Git: rama `feature/fase-8-mapas-analitica`; push, merge, tag y PR no autorizados.
