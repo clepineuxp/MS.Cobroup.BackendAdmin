@@ -211,3 +211,9 @@
   - 60 pruebas en verde: Core 51/51, Infrastructure 9/9.
   - Compilación Release con 0 warnings y 0 errores.
 - Git: rama `feature/fase-9-endurecimiento-despliegue`; push, merge, tag y PR no autorizados.
+
+### 2026-10-21 — Automatización de Bootstrap Local (`apply-bootstrap.ps1`)
+
+- Script de inicialización: `scripts/apply-bootstrap.ps1` implementado para automatizar el aprovisionamiento de clientes OIDC (`SeedClientsOnStartup=true`), organización inicial `COBROUP` y cuentas administrativas/supervisor/cobrador (`/api/v1/bootstrap`) leyendo de forma segura las credenciales desde `UserSecrets`.
+- Soporte para ejecución idempotente con detección de código HTTP `201 Created` / `409 Conflict` y parámetro opcional `-Database` para aprovisionar instancias alternativas.
+- Git: commit local autorizado por el usuario para `scripts/apply-bootstrap.ps1`; push no autorizado.
