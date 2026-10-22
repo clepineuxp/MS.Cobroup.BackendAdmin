@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MS.Cobroup.BackendAdmin.Domain.Identity;
 using MS.Cobroup.BackendAdmin.Domain.Routes;
 using MS.Cobroup.BackendAdmin.Domain.Configuration;
+using MS.Cobroup.BackendAdmin.Domain.LoanTemplates;
 
 namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
 
@@ -24,6 +25,10 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
     public DbSet<AdministrativeAuditRecord> AdministrativeAuditRecords => Set<AdministrativeAuditRecord>();
 
     public DbSet<OrganizationSettings> OrganizationSettings => Set<OrganizationSettings>();
+
+    public DbSet<LoanTemplate> LoanTemplates => Set<LoanTemplate>();
+
+    public DbSet<LoanTemplateVersion> LoanTemplateVersions => Set<LoanTemplateVersion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -159,6 +164,57 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.HasOne<ApplicationUser>()
                 .WithMany()
                 .HasForeignKey(item => item.ActorUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<LoanTemplate>(entity =>
+        {
+            entity.ToTable("loan_templates");
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.Name).HasMaxLength(120).IsRequired();
+            entity.Property(item => item.NormalizedName).HasMaxLength(120).IsRequired();
+            entity.Property(item => item.Description).HasMaxLength(500);
+            entity.Property(item => item.Classification).HasConversion<string>().HasMaxLength(24).IsRequired();
+            entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(item => item.MaxPrincipalAmount).HasPrecision(18, 4);
+            entity.Property(item => item.AllowedPercentagesJson).HasColumnType("jsonb").IsRequired();
+            entity.Ignore(item => item.AllowedPercentages);
+            entity.Property<uint>("xmin").IsRowVersion();
+            entity.HasIndex(item => new { item.OrganizationId, item.NormalizedName }).IsUnique();
+            entity.HasIndex(item => new { item.OrganizationId, item.Status, item.Classification });
+            entity.HasOne<Organization>()
+                .WithMany()
+                .HasForeignKey(item => item.OrganizationId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.UpdatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.HasMany(item => item.Versions)
+                .WithOne()
+                .HasForeignKey(item => item.LoanTemplateId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Navigation(item => item.Versions).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+
+        modelBuilder.Entity<LoanTemplateVersion>(entity =>
+        {
+            entity.ToTable("loan_template_versions");
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.Name).HasMaxLength(120).IsRequired();
+            entity.Property(item => item.Description).HasMaxLength(500);
+            entity.Property(item => item.Classification).HasConversion<string>().HasMaxLength(24).IsRequired();
+            entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(item => item.MaxPrincipalAmount).HasPrecision(18, 4);
+            entity.Property(item => item.AllowedPercentagesJson).HasColumnType("jsonb").IsRequired();
+            entity.HasIndex(item => new { item.LoanTemplateId, item.Version }).IsUnique();
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.RecordedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

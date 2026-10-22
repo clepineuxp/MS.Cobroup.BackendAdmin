@@ -63,4 +63,29 @@ public sealed class AdministrativeAuditRecord
         DateTimeOffset occurredAtUtc,
         string detailsJson) =>
         new(Guid.NewGuid(), organizationId, actorUserId, "organization.settings.updated", "organization_settings", organizationId, occurredAtUtc, detailsJson);
+
+    public static AdministrativeAuditRecord LoanTemplateCreated(
+        Guid organizationId,
+        Guid actorUserId,
+        Guid templateId,
+        DateTimeOffset occurredAtUtc,
+        string detailsJson) =>
+        new(Guid.NewGuid(), organizationId, actorUserId, "loan_template.created", "loan_template", templateId, occurredAtUtc, detailsJson);
+
+    public static AdministrativeAuditRecord LoanTemplateUpdated(
+        Guid organizationId,
+        Guid actorUserId,
+        Guid templateId,
+        DateTimeOffset occurredAtUtc,
+        string detailsJson) =>
+        new(Guid.NewGuid(), organizationId, actorUserId, "loan_template.updated", "loan_template", templateId, occurredAtUtc, detailsJson);
+
+    public static AdministrativeAuditRecord LoanExceptionDecided(
+        Guid organizationId,
+        Guid actorUserId,
+        Guid exceptionId,
+        string decision,
+        DateTimeOffset occurredAtUtc,
+        string detailsJson) =>
+        new(Guid.NewGuid(), organizationId, actorUserId, $"loan_exception.{decision.ToLowerInvariant()}", "loan_exception", exceptionId, occurredAtUtc, detailsJson);
 }
