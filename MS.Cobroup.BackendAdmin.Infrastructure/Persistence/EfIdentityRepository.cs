@@ -165,11 +165,21 @@ public sealed class EfIdentityRepository(IdentityDbContext dbContext) : IIdentit
         return await strategy.ExecuteAsync(async () =>
         {
             await using var transaction = await dbContext.Database.BeginTransactionAsync(
-                System.Data.IsolationLevel.RepeatableRead,
+                IsolationLevel.ReadCommitted,
                 cancellationToken);
 
-            var existing = await dbContext.RefreshTokens
-                .FirstOrDefaultAsync(item => item.TokenHash == currentTokenHash, cancellationToken);
+            RefreshToken? existing;
+            if (dbContext.Database.IsNpgsql())
+            {
+                existing = await dbContext.RefreshTokens
+                    .FromSqlRaw("SELECT * FROM refresh_tokens WHERE \"TokenHash\" = {0} FOR UPDATE", currentTokenHash)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+            else
+            {
+                existing = await dbContext.RefreshTokens
+                    .FirstOrDefaultAsync(item => item.TokenHash == currentTokenHash, cancellationToken);
+            }
 
             if (existing is null)
             {

@@ -14,8 +14,7 @@ public sealed class OrganizationSessionsController(
     OrganizationSessionService organizations,
     ITokenService tokenService) : ControllerBase
 {
-    private const string HostCookieName = "__Host-cobroup-refresh";
-    private const string FallbackCookieName = "cobroup-refresh";
+    private const string RefreshCookieName = "__Host-cobroup-refresh";
 
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
@@ -29,6 +28,7 @@ public sealed class OrganizationSessionsController(
     }
 
     [HttpPut("current")]
+    [ValidateAntiForgeryToken]
     [EnableRateLimiting("identity-write")]
     public async Task<IActionResult> Select(
         SelectOrganizationRequest request,
@@ -46,7 +46,7 @@ public sealed class OrganizationSessionsController(
         }
 
         // B-05: Revoke previous family before issuing tokens for the new tenant
-        var currentRefreshToken = Request.Cookies[HostCookieName] ?? Request.Cookies[FallbackCookieName];
+        var currentRefreshToken = Request.Cookies[RefreshCookieName];
         if (!string.IsNullOrWhiteSpace(currentRefreshToken))
         {
             await tokenService.RevokeFamilyByTokenAsync(
@@ -84,12 +84,11 @@ public sealed class OrganizationSessionsController(
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Strict,
-            Path = "/api/v1/auth",
+            Path = "/",
             Expires = DateTimeOffset.UtcNow.AddDays(30)
         };
 
-        Response.Cookies.Append(HostCookieName, refreshToken, cookieOptions);
-        Response.Cookies.Append(FallbackCookieName, refreshToken, cookieOptions);
+        Response.Cookies.Append(RefreshCookieName, refreshToken, cookieOptions);
     }
 
     private bool TryGetUserId(out Guid userId)

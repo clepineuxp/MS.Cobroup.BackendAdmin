@@ -14,13 +14,14 @@ namespace MS.Cobroup.BackendAdmin.Api.Controllers;
 [Route("api/v1/auth")]
 public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
 {
-    private const string HostCookieName = "__Host-cobroup-refresh";
-    private const string FallbackCookieName = "cobroup-refresh";
+    private const string RefreshCookieName = "__Host-cobroup-refresh";
 
     [HttpGet("antiforgery")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public ActionResult<AntiforgeryResponse> GetAntiforgeryToken()
     {
         var tokens = antiforgery.GetAndStoreTokens(HttpContext);
+        Response.Headers.CacheControl = "no-store";
         return Ok(new AntiforgeryResponse(tokens.RequestToken ?? string.Empty));
     }
 
@@ -106,6 +107,7 @@ public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
     }
 
     [HttpPost("refresh")]
+    [ValidateAntiForgeryToken]
     [EnableRateLimiting("identity-write")]
     public async Task<IActionResult> Refresh(
         [FromServices] ITokenService tokenService,
@@ -135,6 +137,7 @@ public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
     }
 
     [HttpPost("logout")]
+    [ValidateAntiForgeryToken]
     [EnableRateLimiting("identity-write")]
     public async Task<IActionResult> Logout(
         [FromServices] ITokenService tokenService,
@@ -169,12 +172,11 @@ public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Strict,
-            Path = "/api/v1/auth",
+            Path = "/",
             Expires = DateTimeOffset.UtcNow.AddDays(30)
         };
 
-        Response.Cookies.Append(HostCookieName, refreshToken, cookieOptions);
-        Response.Cookies.Append(FallbackCookieName, refreshToken, cookieOptions);
+        Response.Cookies.Append(RefreshCookieName, refreshToken, cookieOptions);
     }
 
     private void ClearRefreshTokenCookie()
@@ -184,17 +186,16 @@ public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Strict,
-            Path = "/api/v1/auth",
+            Path = "/",
             Expires = DateTimeOffset.UtcNow.AddDays(-1)
         };
 
-        Response.Cookies.Delete(HostCookieName, cookieOptions);
-        Response.Cookies.Delete(FallbackCookieName, cookieOptions);
+        Response.Cookies.Delete(RefreshCookieName, cookieOptions);
     }
 
     private string? GetRefreshTokenFromCookie()
     {
-        return Request.Cookies[HostCookieName] ?? Request.Cookies[FallbackCookieName];
+        return Request.Cookies[RefreshCookieName];
     }
 }
 

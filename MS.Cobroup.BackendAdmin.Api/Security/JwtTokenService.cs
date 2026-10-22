@@ -171,20 +171,35 @@ public sealed class JwtTokenService(
         if (existing is not null)
         {
             await identityRepository.RevokeFamilyAsync(existing.FamilyId, now, reason, cancellationToken);
+            return;
         }
-        else
+
+        // I-17: Never trust claims from unvalidated tokens.
+        // Only extract family_id if the token passes full cryptographic validation.
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
+        try
         {
-            // If the token is a valid JWT, read family_id directly from claims
-            var handler = new JwtSecurityTokenHandler();
-            if (handler.CanReadToken(rawRefreshToken))
+            var refreshValidationParams = rsaKeyService.TokenValidationParameters.Clone();
+            refreshValidationParams.ValidAudience = AudienceRefresh;
+
+            handler.ValidateToken(rawRefreshToken, refreshValidationParams, out var validatedToken);
+            if (validatedToken is JwtSecurityToken jwtToken &&
+                string.Equals(jwtToken.Header.Alg, SecurityAlgorithms.RsaSha256, StringComparison.OrdinalIgnoreCase))
             {
-                var jwt = handler.ReadJwtToken(rawRefreshToken);
-                var familyClaim = jwt.Claims.FirstOrDefault(c => c.Type == "family_id")?.Value;
-                if (Guid.TryParse(familyClaim, out var familyId))
+                var typ = jwtToken.Claims.FirstOrDefault(c => c.Type == "typ")?.Value;
+                if (string.Equals(typ, "refresh", StringComparison.Ordinal))
                 {
-                    await identityRepository.RevokeFamilyAsync(familyId, now, reason, cancellationToken);
+                    var familyClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == "family_id")?.Value;
+                    if (Guid.TryParse(familyClaim, out var familyId))
+                    {
+                        await identityRepository.RevokeFamilyAsync(familyId, now, reason, cancellationToken);
+                    }
                 }
             }
+        }
+        catch (SecurityTokenException)
+        {
+            // Cryptographic validation failed; do not trust unverified claims.
         }
     }
 
@@ -195,6 +210,11 @@ public sealed class JwtTokenService(
     {
         var now = DateTimeOffset.UtcNow;
         var jti = Guid.NewGuid().ToString("N");
+        var organizationCode = membership.Organization?.Code;
+        if (string.IsNullOrWhiteSpace(organizationCode))
+        {
+            organizationCode = "DEFAULT";
+        }
 
         var claims = new List<Claim>
         {
@@ -204,7 +224,7 @@ public sealed class JwtTokenService(
             new(JwtRegisteredClaimNames.Nbf, now.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
             new("typ", "access"),
             new("organization_id", membership.OrganizationId.ToString()),
-            new("organization_code", membership.Organization?.Code ?? string.Empty),
+            new("organization_code", organizationCode),
             new(ClaimTypes.Role, membership.Role.ToString()),
             new("role", membership.Role.ToString()),
             new("preferred_username", user.Username),

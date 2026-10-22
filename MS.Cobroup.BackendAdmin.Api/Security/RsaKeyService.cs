@@ -89,10 +89,16 @@ public sealed class RsaKeyService : IRsaKeyService
             ValidateAudience = true,
             ValidAudience = audience,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKeys = validationKeys,
+            IssuerSigningKeyResolver = (token, securityToken, kid, parameters) =>
+            {
+                if (string.IsNullOrWhiteSpace(kid)) return [];
+                return validationKeys.Where(k => string.Equals(k.KeyId, kid, StringComparison.Ordinal));
+            },
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30),
-            ValidAlgorithms = [SecurityAlgorithms.RsaSha256]
+            ValidAlgorithms = [SecurityAlgorithms.RsaSha256],
+            RoleClaimType = "role",
+            NameClaimType = "preferred_username"
         };
     }
 

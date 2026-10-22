@@ -61,10 +61,11 @@ builder.Services.AddAuthorization(options =>
 });
 builder.Services.AddAntiforgery(options =>
 {
-    options.Cookie.Name = "XSRF-TOKEN";
-    options.Cookie.HttpOnly = false;
-    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.Name = "__Host-cobroup-antiforgery";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SameSite = SameSiteMode.Strict;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.Path = "/";
     options.HeaderName = "X-XSRF-TOKEN";
 });
 builder.Services.AddRateLimiter(options =>
@@ -92,9 +93,22 @@ builder.Services.AddSingleton<IRsaKeyService>(rsaKeyService);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        options.MapInboundClaims = false;
         options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.SaveToken = true;
         options.TokenValidationParameters = rsaKeyService.TokenValidationParameters;
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                var validation = AccessJwtValidator.Validate(context.Principal, context.SecurityToken);
+                if (!validation.IsValid)
+                {
+                    context.Fail(validation.FailureReason!);
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
