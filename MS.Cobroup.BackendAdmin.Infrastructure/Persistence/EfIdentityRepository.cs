@@ -212,6 +212,84 @@ public sealed class EfIdentityRepository(IdentityDbContext dbContext) : IIdentit
         });
     }
 
+    public async Task<bool> SwitchOrganizationSessionAtomicAsync(
+        string currentTokenHash,
+        Guid expectedUserId,
+        Guid expectedCurrentOrgId,
+        RefreshToken initialNewToken,
+        DateTimeOffset switchedAtUtc,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var strategy = dbContext.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+
+            RefreshToken? existing;
+            if (dbContext.Database.IsNpgsql())
+            {
+                existing = await dbContext.RefreshTokens
+                    .FromSqlRaw("SELECT * FROM refresh_tokens WHERE \"TokenHash\" = {0} FOR UPDATE", currentTokenHash)
+                    .FirstOrDefaultAsync(cancellationToken);
+            }
+            else
+            {
+                existing = await dbContext.RefreshTokens
+                    .FirstOrDefaultAsync(item => item.TokenHash == currentTokenHash, cancellationToken);
+            }
+
+            if (existing is null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
+
+            // Check sub matches access token user and tenant matches current active tenant
+            if (existing.UserId != expectedUserId || existing.OrganizationId != expectedCurrentOrgId)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return false;
+            }
+
+            if (!existing.IsActive)
+            {
+                // Replay or revoked token detected: revoke entire family to prevent session hijacking
+                var familyTokens = await dbContext.RefreshTokens
+                    .Where(item => item.FamilyId == existing.FamilyId && item.RevokedAtUtc == null)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var token in familyTokens)
+                {
+                    token.Revoke(switchedAtUtc, reason: "Replay attack detected during organization switch");
+                }
+
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return false;
+            }
+
+            // Revoke old family atomically
+            var activeTokensInFamily = await dbContext.RefreshTokens
+                .Where(item => item.FamilyId == existing.FamilyId && item.RevokedAtUtc == null)
+                .ToListAsync(cancellationToken);
+
+            foreach (var token in activeTokensInFamily)
+            {
+                token.Revoke(switchedAtUtc, replacedByTokenHash: initialNewToken.TokenHash, reason: reason);
+            }
+
+            // Persist initial new refresh token under the new family
+            dbContext.RefreshTokens.Add(initialNewToken);
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return true;
+        });
+    }
+
     public async Task RevokeRefreshTokenByHashAsync(
         string tokenHash,
         DateTimeOffset revokedAtUtc,

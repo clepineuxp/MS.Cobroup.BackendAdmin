@@ -11,7 +11,7 @@ namespace MS.Cobroup.BackendAdmin.Api.Security;
 
 public sealed class JwtTokenService(
     IConfiguration configuration,
-    IRsaKeyService rsaKeyService,
+    IJwtSigningKeyProvider keyProvider,
     IIdentityRepository identityRepository) : ITokenService
 {
     private const int AccessTokenLifetimeSeconds = 900; // 15 minutes
@@ -67,8 +67,7 @@ public sealed class JwtTokenService(
         JwtSecurityToken jwtToken;
         try
         {
-            var refreshValidationParams = rsaKeyService.TokenValidationParameters.Clone();
-            refreshValidationParams.ValidAudience = AudienceRefresh;
+            var refreshValidationParams = keyProvider.CreateTokenValidationParameters(issuer, AudienceRefresh);
 
             handler.ValidateToken(rawRefreshToken, refreshValidationParams, out var validatedToken);
             if (validatedToken is not JwtSecurityToken parsed ||
@@ -154,14 +153,14 @@ public sealed class JwtTokenService(
             AccessTokenLifetimeSeconds);
     }
 
-    public async Task RevokeFamilyByTokenAsync(
+    public async Task<RevokeFamilyResult> RevokeFamilyByTokenAsync(
         string rawRefreshToken,
         string reason,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(rawRefreshToken))
         {
-            return;
+            return new RevokeFamilyResult(false, Error: "El token de refresco no puede ser nulo o vacío.");
         }
 
         var hash = HashToken(rawRefreshToken);
@@ -171,7 +170,7 @@ public sealed class JwtTokenService(
         if (existing is not null)
         {
             await identityRepository.RevokeFamilyAsync(existing.FamilyId, now, reason, cancellationToken);
-            return;
+            return new RevokeFamilyResult(true, existing.FamilyId);
         }
 
         // I-17: Never trust claims from unvalidated tokens.
@@ -179,8 +178,9 @@ public sealed class JwtTokenService(
         var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
         try
         {
-            var refreshValidationParams = rsaKeyService.TokenValidationParameters.Clone();
-            refreshValidationParams.ValidAudience = AudienceRefresh;
+            var issuer = configuration["Identity:Issuer"]
+                ?? throw new InvalidOperationException("Identity:Issuer is required.");
+            var refreshValidationParams = keyProvider.CreateTokenValidationParameters(issuer, AudienceRefresh);
 
             handler.ValidateToken(rawRefreshToken, refreshValidationParams, out var validatedToken);
             if (validatedToken is JwtSecurityToken jwtToken &&
@@ -193,14 +193,119 @@ public sealed class JwtTokenService(
                     if (Guid.TryParse(familyClaim, out var familyId))
                     {
                         await identityRepository.RevokeFamilyAsync(familyId, now, reason, cancellationToken);
+                        return new RevokeFamilyResult(true, familyId);
                     }
                 }
             }
+            return new RevokeFamilyResult(false, Error: "El token de refresco no contiene una estructura válida de familia.");
+        }
+        catch (SecurityTokenException ex)
+        {
+            return new RevokeFamilyResult(false, Error: $"Validación criptográfica fallida: {ex.Message}");
+        }
+    }
+
+    public async Task<OrganizationSwitchResult> SwitchOrganizationSessionAsync(
+        Guid expectedUserId,
+        Guid expectedCurrentOrgId,
+        string rawRefreshToken,
+        Guid targetOrgId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(rawRefreshToken))
+        {
+            return new OrganizationSwitchResult(false, StatusCode: 401, Error: "Cookie de refresco ausente o vacía.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var issuer = configuration["Identity:Issuer"]
+            ?? throw new InvalidOperationException("Identity:Issuer is required.");
+
+        // 1. Cryptographic validation of incoming refresh token (RS256, audience, typ=refresh, valid signature and kid)
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
+        JwtSecurityToken jwtToken;
+        try
+        {
+            var refreshValidationParams = keyProvider.CreateTokenValidationParameters(issuer, AudienceRefresh);
+
+            handler.ValidateToken(rawRefreshToken, refreshValidationParams, out var validatedToken);
+            if (validatedToken is not JwtSecurityToken parsed ||
+                !string.Equals(parsed.Header.Alg, SecurityAlgorithms.RsaSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                return new OrganizationSwitchResult(false, StatusCode: 401, Error: "El token de refresco no utiliza el algoritmo RS256 requerido.");
+            }
+            jwtToken = parsed;
         }
         catch (SecurityTokenException)
         {
-            // Cryptographic validation failed; do not trust unverified claims.
+            return new OrganizationSwitchResult(false, StatusCode: 401, Error: "Firma, emisor, audiencia o vigencia del token de refresco inválida.");
         }
+
+        var typ = jwtToken.Claims.FirstOrDefault(c => c.Type == "typ")?.Value;
+        if (!string.Equals(typ, "refresh", StringComparison.Ordinal))
+        {
+            return new OrganizationSwitchResult(false, StatusCode: 401, Error: "El tipo de token no es de refresco.");
+        }
+
+        // 2. Coincidence between sub of access and sub of refresh
+        var subClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == JwtRegisteredClaimNames.Sub)?.Value;
+        if (!Guid.TryParse(subClaim, out var refreshUserId) || refreshUserId != expectedUserId)
+        {
+            return new OrganizationSwitchResult(false, StatusCode: 403, Error: "El sujeto del token de refresco no coincide con el usuario autenticado.");
+        }
+
+        // 3. Coincidence between current tenant in access token and organization in refresh token
+        var orgClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == "organization_id")?.Value;
+        if (!Guid.TryParse(orgClaim, out var refreshOrgId) || refreshOrgId != expectedCurrentOrgId)
+        {
+            return new OrganizationSwitchResult(false, StatusCode: 403, Error: "La organización del token de refresco no coincide con la organización activa de la sesión.");
+        }
+
+        // 4. Verify target membership and target organization active
+        var targetMembership = await identityRepository.SelectMembershipAsync(expectedUserId, targetOrgId, now, cancellationToken);
+        if (targetMembership is null || !targetMembership.IsActive || targetMembership.Organization is null || targetMembership.Organization.Status != OrganizationStatus.Active)
+        {
+            return new OrganizationSwitchResult(false, StatusCode: 403, Error: "Membresía u organización destino no autorizada o suspendida.");
+        }
+
+        // 5. Generate initial refresh token for the new family
+        var newFamilyId = Guid.NewGuid();
+        var (newRefreshTokenString, newRefreshTokenHash) = GenerateRefreshToken(targetMembership.User, targetMembership, newFamilyId, issuer);
+
+        var newRefreshTokenRecord = new RefreshToken(
+            newFamilyId,
+            targetMembership.UserId,
+            targetMembership.OrganizationId,
+            newRefreshTokenHash,
+            now.AddDays(RefreshTokenLifetimeDays),
+            now);
+
+        // 6. Atomic PostgreSQL transaction: verify active token hash, revoke previous family, and persist new initial token
+        var currentTokenHash = HashToken(rawRefreshToken);
+        var switched = await identityRepository.SwitchOrganizationSessionAtomicAsync(
+            currentTokenHash,
+            expectedUserId,
+            expectedCurrentOrgId,
+            newRefreshTokenRecord,
+            now,
+            $"Tenant switched to organization {targetMembership.OrganizationId}",
+            cancellationToken);
+
+        if (!switched)
+        {
+            return new OrganizationSwitchResult(false, StatusCode: 401, Error: "No fue posible verificar y revocar atómicamente la sesión anterior, o el token fue reutilizado.");
+        }
+
+        // 7. Generate access token only after DB commit confirmed
+        var (accessToken, _) = GenerateAccessToken(targetMembership.User, targetMembership, issuer);
+
+        return new OrganizationSwitchResult(
+            true,
+            accessToken,
+            newRefreshTokenString,
+            AccessTokenLifetimeSeconds,
+            targetMembership,
+            StatusCode: 200);
     }
 
     private (string AccessToken, string Jti) GenerateAccessToken(
@@ -240,7 +345,7 @@ public sealed class JwtTokenService(
             Expires = now.UtcDateTime.AddSeconds(AccessTokenLifetimeSeconds),
             Issuer = issuer,
             Audience = AudienceAccess,
-            SigningCredentials = rsaKeyService.SigningCredentials
+            SigningCredentials = keyProvider.GetSigningCredentials()
         };
 
         var handler = new JwtSecurityTokenHandler();
@@ -276,7 +381,7 @@ public sealed class JwtTokenService(
             Expires = now.UtcDateTime.AddDays(RefreshTokenLifetimeDays),
             Issuer = issuer,
             Audience = AudienceRefresh,
-            SigningCredentials = rsaKeyService.SigningCredentials
+            SigningCredentials = keyProvider.GetSigningCredentials()
         };
 
         var handler = new JwtSecurityTokenHandler();

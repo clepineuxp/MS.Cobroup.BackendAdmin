@@ -14,9 +14,16 @@ public interface ITokenService
         string rawRefreshToken,
         CancellationToken cancellationToken);
 
-    Task RevokeFamilyByTokenAsync(
+    Task<RevokeFamilyResult> RevokeFamilyByTokenAsync(
         string rawRefreshToken,
         string reason,
+        CancellationToken cancellationToken);
+
+    Task<OrganizationSwitchResult> SwitchOrganizationSessionAsync(
+        Guid expectedUserId,
+        Guid expectedCurrentOrgId,
+        string rawRefreshToken,
+        Guid targetOrgId,
         CancellationToken cancellationToken);
 }
 
@@ -32,4 +39,18 @@ public sealed record TokenRefreshResult(
     string? AccessToken = null,
     string? RawRefreshToken = null,
     int ExpiresIn = 0,
+    string? Error = null);
+
+public sealed record RevokeFamilyResult(
+    bool Success,
+    Guid? FamilyId = null,
+    string? Error = null);
+
+public sealed record OrganizationSwitchResult(
+    bool Success,
+    string? AccessToken = null,
+    string? RawRefreshToken = null,
+    int ExpiresIn = 0,
+    OrganizationMembership? TargetMembership = null,
+    int StatusCode = 200,
     string? Error = null);

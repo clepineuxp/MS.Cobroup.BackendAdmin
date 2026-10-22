@@ -13,7 +13,8 @@ namespace MS.Cobroup.BackendAdmin.Api.Controllers;
 [Authorize]
 public sealed class OrganizationSessionsController(
     OrganizationSessionService organizations,
-    ITokenService tokenService) : ControllerBase
+    ITokenService tokenService,
+    ILogger<OrganizationSessionsController> logger) : ControllerBase
 {
     private const string RefreshCookieName = "__Host-cobroup-refresh";
 
@@ -40,34 +41,62 @@ public sealed class OrganizationSessionsController(
             return Unauthorized();
         }
 
-        var membership = await organizations.SelectAsync(userId, request.OrganizationId, cancellationToken);
-        if (membership is null || !membership.IsActive)
+        if (!TryGetCurrentOrganizationId(out var currentOrgId))
         {
-            return Forbid();
+            logger.LogWarning("Cambio de organización rechazado: claim organization_id ausente en el access token para usuario {UserId}", userId);
+            ExpireRefreshTokenCookie();
+            return Unauthorized(new { message = "Sesión no contiene contexto de organización válido." });
         }
 
-        // B-05: Revoke previous family before issuing tokens for the new tenant
+        // B-17: Cookie __Host-cobroup-refresh es estrictamente obligatoria
         var currentRefreshToken = Request.Cookies[RefreshCookieName];
-        if (!string.IsNullOrWhiteSpace(currentRefreshToken))
+        if (string.IsNullOrWhiteSpace(currentRefreshToken))
         {
-            await tokenService.RevokeFamilyByTokenAsync(
-                currentRefreshToken,
-                $"Tenant switched to organization {membership.OrganizationId}",
-                cancellationToken);
+            logger.LogWarning("Cambio de organización rechazado: cookie __Host-cobroup-refresh ausente para usuario {UserId}", userId);
+            ExpireRefreshTokenCookie();
+            return Unauthorized(new { message = "Sesión inválida o expirada. Se requiere cookie de refresco." });
         }
 
-        // Issue new tokens under a new family
-        var newFamilyId = Guid.NewGuid();
-        var tokens = await tokenService.IssueTokensAsync(membership.User, membership, newFamilyId, cancellationToken);
+        // B-17: Validación criptográfica, coincidencia de sub/tenant, y transacción atómica en PostgreSQL
+        var switchResult = await tokenService.SwitchOrganizationSessionAsync(
+            userId,
+            currentOrgId,
+            currentRefreshToken,
+            request.OrganizationId,
+            cancellationToken);
 
-        SetRefreshTokenCookie(tokens.RawRefreshToken);
+        if (!switchResult.Success)
+        {
+            logger.LogWarning(
+                "Cambio de organización fallido para usuario {UserId} hacia organización {TargetOrgId}. Motivo: {Reason}",
+                userId,
+                request.OrganizationId,
+                switchResult.Error);
+
+            ExpireRefreshTokenCookie();
+
+            return StatusCode(switchResult.StatusCode, new
+            {
+                message = "Cambio de organización rechazado por seguridad."
+            });
+        }
+
+        // Commit confirmado: establecer cookie con la nueva familia
+        SetRefreshTokenCookie(switchResult.RawRefreshToken!);
+
+        var membership = switchResult.TargetMembership!;
+        logger.LogInformation(
+            "Cambio de organización exitoso: usuario {UserId} cambió de organización {OldOrgId} a {NewOrgId}",
+            userId,
+            currentOrgId,
+            membership.OrganizationId);
 
         return Ok(new
         {
             status = "authenticated",
-            access_token = tokens.AccessToken,
-            expires_in = tokens.ExpiresIn,
-            token_type = tokens.TokenType,
+            access_token = switchResult.AccessToken,
+            expires_in = switchResult.ExpiresIn,
+            token_type = "Bearer",
             organization = new
             {
                 id = membership.OrganizationId,
@@ -92,12 +121,33 @@ public sealed class OrganizationSessionsController(
         Response.Cookies.Append(RefreshCookieName, refreshToken, cookieOptions);
     }
 
+    private void ExpireRefreshTokenCookie()
+    {
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Path = "/",
+            Expires = DateTimeOffset.UtcNow.AddDays(-1)
+        };
+
+        Response.Cookies.Append(RefreshCookieName, string.Empty, cookieOptions);
+    }
+
     private bool TryGetUserId(out Guid userId)
     {
         var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier) 
             ?? User.FindFirstValue("sub") 
             ?? User.FindFirstValue("user_id");
         return Guid.TryParse(idClaim, out userId);
+    }
+
+    private bool TryGetCurrentOrganizationId(out Guid organizationId)
+    {
+        var orgClaim = User.FindFirstValue("organization_id")
+            ?? User.FindFirstValue("org_id");
+        return Guid.TryParse(orgClaim, out organizationId);
     }
 }
 

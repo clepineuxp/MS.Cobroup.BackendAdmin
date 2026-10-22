@@ -111,8 +111,9 @@ builder.Services.AddDbContext<IdentityDbContext>(options =>
         postgres.MigrationsAssembly(typeof(IdentityDbContext).Assembly.FullName));
 });
 
-var rsaKeyService = new RsaKeyService(builder.Configuration, builder.Environment);
-builder.Services.AddSingleton<IRsaKeyService>(rsaKeyService);
+var keyProvider = JwtSigningKeyProviderFactory.Create(builder.Configuration, builder.Environment);
+builder.Services.AddSingleton<IJwtSigningKeyProvider>(keyProvider);
+builder.Services.AddSingleton<IRsaKeyService>(sp => (IRsaKeyService)sp.GetRequiredService<IJwtSigningKeyProvider>());
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -120,7 +121,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.MapInboundClaims = false;
         options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.SaveToken = true;
-        options.TokenValidationParameters = rsaKeyService.TokenValidationParameters;
+        var issuer = builder.Configuration["Identity:Issuer"] ?? "https://localhost:7119/";
+        var audience = builder.Configuration["Identity:Audience"] ?? "cobroup-api";
+        options.TokenValidationParameters = keyProvider.CreateTokenValidationParameters(issuer, audience);
         options.Events = new JwtBearerEvents
         {
             OnTokenValidated = context =>

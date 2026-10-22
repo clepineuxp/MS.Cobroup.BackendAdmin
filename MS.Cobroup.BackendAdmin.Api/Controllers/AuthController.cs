@@ -27,9 +27,9 @@ public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
 
     [HttpGet(".well-known/jwks.json")]
     [AllowAnonymous]
-    public IActionResult GetJwks([FromServices] IRsaKeyService rsaKeyService)
+    public IActionResult GetJwks([FromServices] IJwtSigningKeyProvider keyProvider)
     {
-        return Ok(rsaKeyService.GetPublicJwks());
+        return Ok(keyProvider.GetPublicJwks());
     }
 
     [HttpPost("login")]

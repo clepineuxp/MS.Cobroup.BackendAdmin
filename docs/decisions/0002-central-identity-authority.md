@@ -1,6 +1,6 @@
 # ADR-002 — Autoridad central de identidad por organización
 
-Estado: revisada y aceptada el 2026-10-22. Implementación pendiente de conformidad.
+Estado: SUPERSEDIDA parcialmente el 2026-10-22 por ADR-0007 en todo lo relativo a algoritmo, custodia y publicación de claves. Se conserva como trazabilidad histórica; siguen vigentes sus reglas de autoridad central, sesiones y tenant.
 
 `MS.Cobroup.BackendAdmin` es la única autoridad de organizaciones, usuarios y sesiones. La combinación `(organization_id, normalized_username)` es única en PostgreSQL. Las contraseñas usan `PasswordHasher` de ASP.NET Core y el bootstrap es transaccional, de un solo uso y auditable.
 

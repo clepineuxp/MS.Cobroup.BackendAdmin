@@ -50,6 +50,15 @@ public interface IIdentityRepository
         DateTimeOffset rotatedAtUtc,
         CancellationToken cancellationToken);
 
+    Task<bool> SwitchOrganizationSessionAtomicAsync(
+        string currentTokenHash,
+        Guid expectedUserId,
+        Guid expectedCurrentOrgId,
+        RefreshToken initialNewToken,
+        DateTimeOffset switchedAtUtc,
+        string reason,
+        CancellationToken cancellationToken);
+
     Task RevokeRefreshTokenByHashAsync(
         string tokenHash,
         DateTimeOffset revokedAtUtc,

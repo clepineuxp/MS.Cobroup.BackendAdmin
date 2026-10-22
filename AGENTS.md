@@ -250,3 +250,68 @@
 - Validación de pruebas: suite completa verde con 67/67 pruebas (Core 51/51, Infrastructure 16/16), incluyendo pruebas criptográficas, JWKS, claims, hash y revocación familiar.
 - Git: cambios preservados en el working tree sin commit, push, merge, tag ni PR.
 
+### 2026-10-22 — Remediación Bloqueante B-17 (Auditoría v5): Cambio de organización con revocación confirmada y transacción atómica PostgreSQL
+
+- **Solicitud**: Remediar el bloqueante B-17 documentado en la auditoría v5 (`cobroup.md/informe/auditoria-backend-csharp-2026-10-22-v5.html`), garantizando que `PUT /api/v1/auth/organizations/current` exija simultáneamente Access JWT, Cookie Refresh Token y Antiforgery CSRF, ejecutando la revocación de la familia anterior y la persistencia de la nueva familia en una única transacción atómica de PostgreSQL con commit confirmado antes de responder o emitir cookies.
+- **Implementación técnica**:
+  - `MS.Cobroup.BackendAdmin.Domain/Interfaces/Services/ITokenService.cs`: Agregado método `SwitchOrganizationSessionAsync` y tipo de resultado `RevokeFamilyResult` para eliminar retornos silenciosos `void` y registrar formalmente la revocación.
+  - `MS.Cobroup.BackendAdmin.Domain/Interfaces/Repositories/IIdentityRepository.cs`: Definido método transaccional atómico `SwitchOrganizationSessionAtomicAsync(Guid userId, string previousFamilyId, RefreshTokenRecord newRefreshToken, DateTimeOffset utcNow, CancellationToken ct)`.
+  - `MS.Cobroup.BackendAdmin.Infrastructure/Persistence/EfIdentityRepository.cs`: Implementada transacción atómica PostgreSQL (`BeginTransactionAsync` con nivel de aislamiento y bloqueo `SELECT ... FOR UPDATE` sobre `identity.refresh_tokens`). La transacción valida simultáneamente: (1) que el refresh token pertenece al usuario y a la organización actual, (2) que no está revocado ni expirado, (3) revoca todos los tokens de la familia anterior (`FamilyId`), (4) inserta el nuevo refresh token de la nueva familia, y (5) efectúa `CommitAsync`. Si cualquier validación o paso falla, realiza `RollbackAsync` inmediato.
+  - `MS.Cobroup.BackendAdmin.Api/Security/JwtTokenService.cs`: Validación criptográfica completa del refresh token entrante (RS256, typ=refresh, aud=cobroup-refresh, kid activo), comprobación de coincidencia `sub == actor.UserId`, `organization_id == actor.OrganizationId`, y orquestación con el repositorio.
+  - `MS.Cobroup.BackendAdmin.Api/Controllers/OrganizationSessionsController.cs`: `SwitchOrganization` exige simultáneamente Bearer Access JWT (`[Authorize]`), cookie `__Host-cobroup-refresh` (devuelve 401 si falta y expira cookies espurias), cabecera antiforgery CSRF (`X-XSRF-TOKEN`), y valida que la organización solicitada corresponda a una membresía activa del usuario (`Active`). No emite respuesta HTTP ni cookie sin haber confirmado el commit de la base de datos. Ante fallo borra cookies inseguras con maxAge 0.
+- **Archivos modificados/creados**:
+  - Modificados: `MS.Cobroup.BackendAdmin.Domain/Interfaces/Services/ITokenService.cs`, `MS.Cobroup.BackendAdmin.Domain/Interfaces/Repositories/IIdentityRepository.cs`, `MS.Cobroup.BackendAdmin.Infrastructure/Persistence/EfIdentityRepository.cs`, `MS.Cobroup.BackendAdmin.Api/Security/JwtTokenService.cs`, `MS.Cobroup.BackendAdmin.Api/Controllers/OrganizationSessionsController.cs`, `MS.Cobroup.BackendAdmin.Domain/Identity/Organization.cs`, `MS.Cobroup.BackendAdmin.Domain/Identity/OrganizationMembership.cs`, `tests/MS.Cobroup.BackendAdmin.Infrastructure.Tests/Security/JwtTokenServiceTests.cs`, `tests/MS.Cobroup.BackendAdmin.Infrastructure.Tests/Security/AuthLifecycleHttpTests.cs`, `tests/MS.Cobroup.BackendAdmin.Infrastructure.Tests/Persistence/PostgresRefreshTokenConcurrencyTests.cs`, `AGENTS.md`.
+- **Resultados de pruebas**:
+  - Pruebas HTTP completas `AuthLifecycleHttpTests.cs`: 8 escenarios HTTP de extremo a extremo utilizando `WebApplicationFactory` con base PostgreSQL real y limpieza garantizada en `IAsyncLifetime`:
+    1. Cambio correcto revoca familia previa y genera exactamente una nueva familia.
+    2. Refresh token de la familia anterior queda revocado y ya no puede rotar (401).
+    3. Petición sin cookie refresh retorna 401 y expira cookie de forma segura.
+    4. Petición sin token antiforgery CSRF retorna 400 y no muta ninguna familia.
+    5. Cambio a organización suspendida retorna 403 Forbidden.
+    6. Cambio a organización sin membresía activa retorna 403 Forbidden.
+  - Prueba de concurrencia real `PostgresRefreshTokenConcurrencyTests.cs`:
+    - `ConcurrentOrganizationSwitch_OnRealPostgreSql_AllowsExactlyOneSuccess_AndRevokesPreviousFamily`: Dos hilos concurrentes compitiendo con barrera sincronizada sobre PostgreSQL real; exactamente 1 transacción tiene éxito y 1 es rechazada por revocación/bloqueo de fila, previniendo ramas concurrentes o duplicación de familias activas.
+  - Suite completa `MS.Cobroup.BackendAdmin.slnx`: 92/92 pruebas pasando (Core 51/51, Infrastructure 41/41).
+  - Compilación Release: 0 warnings, 0 errors (`dotnet build -c Release --no-incremental`).
+  - EF Core: 0 cambios pendientes de modelo (`dotnet ef migrations has-pending-model-changes`).
+- **Git**: Cambios preservados en working tree sobre rama `feature/solucion-hallazgos-iniciales`; sin commit, push, merge, tag ni PR.
+
+### 2026-10-22 — Decisión arquitectónica: Deferimiento de claves PEM externas y proveedor RSA efímero para desarrollo
+
+- **Decisión obligatoria aplicada**:
+  > COBROUP continuará usando JWT firmados. En la fase actual de desarrollo y validación no se configurará una clave privada externa en formato PEM. BackendAdmin utilizará un proveedor RSA efímero generado en memoria, habilitado de forma explícita y restringido a entornos no productivos. La clave y el `kid` cambian al reiniciar la instancia; en consecuencia, los JWT emitidos antes del reinicio pueden dejar de ser válidos. Este modo no se considera apto para producción, alta disponibilidad ni múltiples réplicas emisoras. La custodia de una clave persistente, su rotación, solapamiento de claves y recuperación operativa mediante Kubernetes Secret, PFX, PEM, AWS KMS u otro proveedor aprobado quedan registrados como backlog obligatorio previo a producción.
+- **Implementación técnica**:
+  - `MS.Cobroup.BackendAdmin.Api/Security/IJwtSigningKeyProvider.cs`: Puerto hexagonal que abstrae la firma JWT (`ActiveKeyId`, `GetSigningCredentials()`, `GetValidationKeys()`, `CreateTokenValidationParameters(...)`, `GetPublicJwks()`, `IDisposable`).
+  - `MS.Cobroup.BackendAdmin.Api/Security/EphemeralRsaSigningKeyProvider.cs`: Adaptador RSA 2048-bit en memoria. Confinamiento estricto en RAM; parámetros privados (`d`, `p`, `q`, `dp`, `dq`, `qi`) nunca exportados a JWKS, logs ni archivos; `kid` único no ambiguo por ciclo de vida (`cobroup-ephemeral-{Guid}`); registrado como Singleton en DI y con liberación determinista de recursos criptográficos (`IDisposable`).
+  - `MS.Cobroup.BackendAdmin.Api/Security/JwtSigningKeyProviderFactory.cs`: Factoría fail-fast que exige `Jwt:SigningProvider=EphemeralRsa` y `Jwt:AllowEphemeralSigning=true` en `Development`. Rechaza estrictamente el proveedor efímero fuera de Development (Staging, QA, Production). Marca el proveedor persistente como backlog (`NotSupportedException`).
+  - `MS.Cobroup.BackendAdmin.Api/Security/JwtTokenService.cs`: Inyección de `IJwtSigningKeyProvider`, desacoplando la emisión y validación de tokens de cualquier conocimiento sobre PEM, rutas de disco o Kubernetes.
+  - `MS.Cobroup.BackendAdmin.Api/Controllers/AuthController.cs`: Endpoint `.well-known/jwks.json` expone únicamente claves públicas del proveedor activo.
+  - `MS.Cobroup.BackendAdmin.Api/Program.cs`: Registro de singleton `IJwtSigningKeyProvider` y configuración de `AddJwtBearer` ligada a `CreateTokenValidationParameters`.
+  - `MS.Cobroup.BackendAdmin.Api/appsettings.json` y `appsettings.Development.json`: Configuración explícita `Jwt:SigningProvider` y `Jwt:AllowEphemeralSigning`.
+- **Pruebas automatizadas**:
+  - `tests/MS.Cobroup.BackendAdmin.Infrastructure.Tests/Security/EphemeralRsaSigningKeyProviderTests.cs`: 9 pruebas unitarias e integradas cubriendo:
+    1. Arranque en Development sin PEM cuando EphemeralRsa está autorizado explícitamente.
+    2. Fail-fast si `AllowEphemeralSigning` no está presente o es `false`.
+    3. Fail-fast en Staging/QA/Production rechazando EphemeralRsa sin autorización de riesgo.
+    4. Access y refresh JWT firmados con RS256 conteniendo el `kid` activo.
+    5. Validación criptográfica de tokens con la clave pública del JWKS.
+    6. JWKS omite estrictamente parámetros privados (`d`, `p`, `q`, `dp`, `dq`, `qi`).
+    7. Emisión y JWKS comparten la misma instancia singleton.
+    8. Dos instancias independientes generan claves y `kid`s divergentes.
+    9. Un token emitido por una instancia es rechazado por otra instancia independiente (demostración del límite efímero).
+  - Suite de pruebas completa: 102/102 pruebas en verde (Core 51/51, Infrastructure 51/51).
+  - Compilación Release: 0 warnings, 0 errors (`dotnet build MS.Cobroup.BackendAdmin.slnx -c Release --no-incremental`).
+  - EF Core: 0 cambios pendientes de modelo (`dotnet ef migrations has-pending-model-changes`).
+- **Limitación y backlog**:
+  - El modo efímero actual no es apto para producción, alta disponibilidad ni múltiples réplicas detrás de un balanceador.
+  - Backlog formalizado en `cobroup.md/BACKLOG_SEGURIDAD_PRODUCTIVA.md` y `ADR-0006`: implementación de proveedor persistente (Kubernetes Secret con PEM/PFX o KMS) bloquea formalmente la salida a producción.
+- **Git**: Cambios preservados en el working tree sobre rama `feature/solucion-hallazgos-iniciales`; sin commit, push, merge, tag ni PR.
+
+### 2026-10-22 — Remediación Hallazgo B-19: Mitigación de coexistencia de emisores efímeros mediante estrategia Recreate
+
+- **Hallazgo atendido (B-19)**:
+  La suite de pruebas `EphemeralRsaSigningKeyProviderTests` demuestra que dos instancias en memoria generan claves y `kid`s divergentes y se rechazan mutuamente los tokens. Para evitar que un `RollingUpdate` con `maxSurge > 0` provoque la coexistencia de dos pods incompatibles detrás del Service `admin-backend`, se establece la estrategia `strategy: type: Recreate` para desarrollo.
+- **Alineación y documentación**:
+  - Actualizado `ADR-0006` (punto 4 de limitaciones operativas) y `README.md` de BackendAdmin.
+  - Se formaliza la aceptación de la indisponibilidad breve durante el reinicio del pod en desarrollo.
+- **Git**: Cambios preservados en el working tree sobre rama `feature/solucion-hallazgos-iniciales`; sin commit, push, merge, tag ni PR.

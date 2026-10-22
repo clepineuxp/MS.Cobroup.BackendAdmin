@@ -203,6 +203,41 @@ public sealed class IdentityServicesTests
             return Task.FromResult(true);
         }
 
+        public Task<bool> SwitchOrganizationSessionAtomicAsync(
+            string currentTokenHash,
+            Guid expectedUserId,
+            Guid expectedCurrentOrgId,
+            RefreshToken initialNewToken,
+            DateTimeOffset switchedAtUtc,
+            string reason,
+            CancellationToken cancellationToken)
+        {
+            var existing = RefreshTokens.SingleOrDefault(t => t.TokenHash == currentTokenHash);
+            if (existing is null) return Task.FromResult(false);
+
+            if (existing.UserId != expectedUserId || existing.OrganizationId != expectedCurrentOrgId)
+            {
+                return Task.FromResult(false);
+            }
+
+            if (!existing.IsActive)
+            {
+                foreach (var token in RefreshTokens.Where(t => t.FamilyId == existing.FamilyId && t.RevokedAtUtc == null))
+                {
+                    token.Revoke(switchedAtUtc, reason: "Replay attack detected during organization switch");
+                }
+                return Task.FromResult(false);
+            }
+
+            foreach (var token in RefreshTokens.Where(t => t.FamilyId == existing.FamilyId && t.RevokedAtUtc == null))
+            {
+                token.Revoke(switchedAtUtc, replacedByTokenHash: initialNewToken.TokenHash, reason: reason);
+            }
+
+            RefreshTokens.Add(initialNewToken);
+            return Task.FromResult(true);
+        }
+
         public Task RevokeRefreshTokenByHashAsync(
             string tokenHash,
             DateTimeOffset revokedAtUtc,

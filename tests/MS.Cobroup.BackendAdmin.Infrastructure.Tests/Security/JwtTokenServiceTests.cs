@@ -230,6 +230,73 @@ public sealed class JwtTokenServiceTests
         Assert.Null(key.Q);
     }
 
+    [Fact]
+    public async Task SwitchOrganizationSessionAsync_Valid_RevokesOldFamily_IssuesNewTokens()
+    {
+        var (user, membership1) = CreateUserAndMembership();
+        var now = DateTimeOffset.UtcNow;
+        var org2 = Organization.Create("ORG02", "Organization Two", now);
+        var membership2 = OrganizationMembership.Create(user.Id, org2.Id, UserRole.Admin, now);
+        typeof(OrganizationMembership).GetProperty(nameof(OrganizationMembership.Organization))!.SetValue(membership2, org2);
+        typeof(OrganizationMembership).GetProperty(nameof(OrganizationMembership.User))!.SetValue(membership2, user);
+        repository.Organizations.Add(org2);
+        repository.Memberships.Add(membership2);
+
+        var initialTokens = await tokenService.IssueTokensAsync(user, membership1, null, CancellationToken.None);
+        var oldFamilyId = initialTokens.FamilyId;
+
+        var switchResult = await tokenService.SwitchOrganizationSessionAsync(
+            user.Id,
+            membership1.OrganizationId,
+            initialTokens.RawRefreshToken,
+            org2.Id,
+            CancellationToken.None);
+
+        Assert.True(switchResult.Success);
+        Assert.NotNull(switchResult.AccessToken);
+        Assert.NotNull(switchResult.RawRefreshToken);
+        Assert.NotEqual(initialTokens.RawRefreshToken, switchResult.RawRefreshToken);
+
+        // Verify old family revoked
+        var oldTokens = repository.RefreshTokens.Where(t => t.FamilyId == oldFamilyId).ToList();
+        Assert.All(oldTokens, t => Assert.NotNull(t.RevokedAtUtc));
+
+        // Verify old token cannot refresh
+        var refreshOld = await tokenService.RefreshTokensAsync(initialTokens.RawRefreshToken, CancellationToken.None);
+        Assert.False(refreshOld.Success);
+
+        // Verify new token CAN refresh
+        var refreshNew = await tokenService.RefreshTokensAsync(switchResult.RawRefreshToken, CancellationToken.None);
+        Assert.True(refreshNew.Success);
+    }
+
+    [Fact]
+    public async Task SwitchOrganizationSessionAsync_WrongUserOrCurrentTenant_FailsWithoutMutating()
+    {
+        var (user, membership1) = CreateUserAndMembership();
+        var initialTokens = await tokenService.IssueTokensAsync(user, membership1, null, CancellationToken.None);
+
+        // Wrong user
+        var wrongUserResult = await tokenService.SwitchOrganizationSessionAsync(
+            Guid.NewGuid(),
+            membership1.OrganizationId,
+            initialTokens.RawRefreshToken,
+            membership1.OrganizationId,
+            CancellationToken.None);
+        Assert.False(wrongUserResult.Success);
+        Assert.Equal(403, wrongUserResult.StatusCode);
+
+        // Wrong current tenant
+        var wrongTenantResult = await tokenService.SwitchOrganizationSessionAsync(
+            user.Id,
+            Guid.NewGuid(),
+            initialTokens.RawRefreshToken,
+            membership1.OrganizationId,
+            CancellationToken.None);
+        Assert.False(wrongTenantResult.Success);
+        Assert.Equal(403, wrongTenantResult.StatusCode);
+    }
+
     private (ApplicationUser User, OrganizationMembership Membership) CreateUserAndMembership()
     {
         var now = DateTimeOffset.UtcNow;
@@ -246,83 +313,6 @@ public sealed class JwtTokenServiceTests
         repository.Memberships.Add(membership);
 
         return (user, membership);
-    }
-
-    private sealed class TestIdentityRepository : IIdentityRepository
-    {
-        public List<ApplicationUser> Users { get; } = [];
-        public List<Organization> Organizations { get; } = [];
-        public List<OrganizationMembership> Memberships { get; } = [];
-        public List<RefreshToken> RefreshTokens { get; } = [];
-
-        public Task<bool> TryBootstrapAsync(Organization organization, IReadOnlyCollection<ApplicationUser> users, IReadOnlyCollection<OrganizationMembership> memberships, SecurityAuditRecord auditRecord, CancellationToken cancellationToken) =>
-            Task.FromResult(true);
-
-        public Task<ApplicationUser?> FindActiveUserAsync(string normalizedUsername, CancellationToken cancellationToken) =>
-            Task.FromResult(Users.FirstOrDefault(u => u.NormalizedUsername == normalizedUsername));
-
-        public Task<OrganizationMembership?> SelectMostRecentlyAccessedMembershipAsync(Guid userId, DateTimeOffset accessedAtUtc, CancellationToken cancellationToken) =>
-            Task.FromResult(Memberships.FirstOrDefault(m => m.UserId == userId && m.IsActive));
-
-        public Task<OrganizationMembership?> SelectMembershipAsync(Guid userId, Guid organizationId, DateTimeOffset accessedAtUtc, CancellationToken cancellationToken) =>
-            Task.FromResult(Memberships.FirstOrDefault(m => m.UserId == userId && m.OrganizationId == organizationId && m.IsActive));
-
-        public Task<IReadOnlyCollection<OrganizationMembership>> ListActiveMembershipsAsync(Guid userId, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyCollection<OrganizationMembership>>(Memberships.Where(m => m.UserId == userId && m.IsActive).ToList());
-
-        public Task SaveRefreshTokenAsync(RefreshToken refreshToken, CancellationToken cancellationToken)
-        {
-            RefreshTokens.Add(refreshToken);
-            return Task.CompletedTask;
-        }
-
-        public Task<RefreshToken?> FindRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken) =>
-            Task.FromResult(RefreshTokens.FirstOrDefault(t => t.TokenHash == tokenHash));
-
-        public Task RevokeFamilyAsync(Guid familyId, DateTimeOffset revokedAtUtc, string reason, CancellationToken cancellationToken)
-        {
-            foreach (var token in RefreshTokens.Where(t => t.FamilyId == familyId && t.RevokedAtUtc == null))
-            {
-                token.Revoke(revokedAtUtc, reason: reason);
-            }
-            return Task.CompletedTask;
-        }
-
-        public Task<bool> RotateRefreshTokenAtomicAsync(string currentTokenHash, RefreshToken newToken, DateTimeOffset rotatedAtUtc, CancellationToken cancellationToken)
-        {
-            var existing = RefreshTokens.FirstOrDefault(t => t.TokenHash == currentTokenHash);
-            if (existing is null) return Task.FromResult(false);
-
-            if (!existing.IsActive)
-            {
-                // Replay detected!
-                foreach (var token in RefreshTokens.Where(t => t.FamilyId == existing.FamilyId && t.RevokedAtUtc == null))
-                {
-                    token.Revoke(rotatedAtUtc, reason: "Replay attack detected during rotation");
-                }
-                return Task.FromResult(false);
-            }
-
-            existing.Revoke(rotatedAtUtc, replacedByTokenHash: newToken.TokenHash, reason: "Rotated");
-            RefreshTokens.Add(newToken);
-            return Task.FromResult(true);
-        }
-
-        public Task RevokeRefreshTokenByHashAsync(string tokenHash, DateTimeOffset revokedAtUtc, string? replacedByTokenHash, string? reason, CancellationToken cancellationToken)
-        {
-            var existing = RefreshTokens.FirstOrDefault(t => t.TokenHash == tokenHash);
-            existing?.Revoke(revokedAtUtc, replacedByTokenHash, reason);
-            return Task.CompletedTask;
-        }
-
-        public Task RevokeUserRefreshTokensAsync(Guid userId, DateTimeOffset revokedAtUtc, CancellationToken cancellationToken)
-        {
-            foreach (var token in RefreshTokens.Where(t => t.UserId == userId && t.IsActive))
-            {
-                token.Revoke(revokedAtUtc, reason: "Revoked for user");
-            }
-            return Task.CompletedTask;
-        }
     }
 
     private sealed class TestHostEnvironment : IHostEnvironment

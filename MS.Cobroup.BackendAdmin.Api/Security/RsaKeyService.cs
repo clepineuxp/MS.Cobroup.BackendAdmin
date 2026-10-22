@@ -11,10 +11,15 @@ public sealed class RsaKeyService : IRsaKeyService
     private readonly string? previousKid;
     private readonly string issuer;
     private readonly string audience;
+    private readonly List<SecurityKey> validationKeys;
 
     public string KeyId => activeKid;
+    public string ActiveKeyId => activeKid;
     public SigningCredentials SigningCredentials { get; }
     public TokenValidationParameters TokenValidationParameters { get; }
+
+    public SigningCredentials GetSigningCredentials() => SigningCredentials;
+    public IReadOnlyCollection<SecurityKey> GetValidationKeys() => validationKeys;
 
     public RsaKeyService(IConfiguration configuration, IHostEnvironment environment)
     {
@@ -70,7 +75,7 @@ public sealed class RsaKeyService : IRsaKeyService
         var activeKey = new RsaSecurityKey(activeRsa) { KeyId = activeKid };
         SigningCredentials = new SigningCredentials(activeKey, SecurityAlgorithms.RsaSha256);
 
-        var validationKeys = new List<SecurityKey> { activeKey };
+        validationKeys = [activeKey];
 
         // Support overlapping rotation with previous public key
         var previousKeyPem = configuration["Jwt:PreviousPublicKeyPem"];
@@ -82,14 +87,15 @@ public sealed class RsaKeyService : IRsaKeyService
             validationKeys.Add(new RsaSecurityKey(previousRsa) { KeyId = previousKid });
         }
 
-        TokenValidationParameters = new TokenValidationParameters
+        TokenValidationParameters = CreateTokenValidationParameters(issuer, audience);
+    }
+
+    public TokenValidationParameters CreateTokenValidationParameters(string tokenIssuer, string tokenAudience)
+    {
+        var parameters = new TokenValidationParameters
         {
-            ValidateIssuer = true,
-            ValidIssuer = issuer,
-            ValidateAudience = true,
-            ValidAudience = audience,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKeyResolver = (token, securityToken, kid, parameters) =>
+            IssuerSigningKeyResolver = (token, securityToken, kid, p) =>
             {
                 if (string.IsNullOrWhiteSpace(kid)) return [];
                 return validationKeys.Where(k => string.Equals(k.KeyId, kid, StringComparison.Ordinal));
@@ -100,6 +106,34 @@ public sealed class RsaKeyService : IRsaKeyService
             RoleClaimType = "role",
             NameClaimType = "preferred_username"
         };
+
+        if (!string.IsNullOrWhiteSpace(tokenIssuer))
+        {
+            parameters.ValidateIssuer = true;
+            parameters.ValidIssuer = tokenIssuer;
+        }
+        else
+        {
+            parameters.ValidateIssuer = false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(tokenAudience))
+        {
+            parameters.ValidateAudience = true;
+            parameters.ValidAudience = tokenAudience;
+        }
+        else
+        {
+            parameters.ValidateAudience = false;
+        }
+
+        return parameters;
+    }
+
+    public void Dispose()
+    {
+        activeRsa?.Dispose();
+        previousRsa?.Dispose();
     }
 
     public JsonWebKeySet GetPublicJwks()

@@ -66,4 +66,9 @@ public sealed class OrganizationMembership
 
         LastAccessedAtUtc = accessedAtUtc;
     }
+
+    public void Deactivate()
+    {
+        IsActive = false;
+    }
 }

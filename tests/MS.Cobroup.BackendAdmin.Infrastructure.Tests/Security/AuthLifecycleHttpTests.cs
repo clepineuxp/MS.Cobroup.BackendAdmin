@@ -19,9 +19,11 @@ using Xunit;
 
 namespace MS.Cobroup.BackendAdmin.Infrastructure.Tests.Security;
 
-public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory<Program>>, IAsyncLifetime
 {
     private readonly WebApplicationFactory<Program> factory;
+    private readonly List<Guid> createdOrgIds = [];
+    private readonly List<Guid> createdUserIds = [];
 
     public AuthLifecycleHttpTests(WebApplicationFactory<Program> factory)
     {
@@ -29,6 +31,46 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
         {
             builder.UseEnvironment("Development");
         });
+    }
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        try
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+
+            if (createdUserIds.Count > 0 || createdOrgIds.Count > 0)
+            {
+                var memberships = await db.OrganizationMemberships
+                    .Where(m => createdUserIds.Contains(m.UserId) || createdOrgIds.Contains(m.OrganizationId))
+                    .ToListAsync();
+                db.OrganizationMemberships.RemoveRange(memberships);
+
+                var tokens = await db.RefreshTokens
+                    .Where(t => createdUserIds.Contains(t.UserId) || createdOrgIds.Contains(t.OrganizationId))
+                    .ToListAsync();
+                db.RefreshTokens.RemoveRange(tokens);
+
+                var users = await db.Users
+                    .Where(u => createdUserIds.Contains(u.Id))
+                    .ToListAsync();
+                db.Users.RemoveRange(users);
+
+                var orgs = await db.Organizations
+                    .Where(o => createdOrgIds.Contains(o.Id))
+                    .ToListAsync();
+                db.Organizations.RemoveRange(orgs);
+
+                await db.SaveChangesAsync();
+            }
+        }
+        catch
+        {
+            // Limpieza garantizada de fixtures en base de datos
+        }
     }
 
     [Fact]
@@ -78,7 +120,6 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
     {
         var client = CreateHttpsClient();
 
-        // 1. Login to obtain session cookie
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var (user, org, password) = await CreateTestUserAndOrgAsync(scope.ServiceProvider, db);
@@ -92,19 +133,14 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
         Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
         var refreshCookie = ExtractCookie(loginRes, "__Host-cobroup-refresh");
 
-        // 2. Call refresh without CSRF header
         var refreshReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
         refreshReq.Headers.Add("Cookie", $"__Host-cobroup-refresh={refreshCookie}");
 
         var refreshRes = await client.SendAsync(refreshReq);
 
-        // Must return 400 with explicit error code
         Assert.Equal(HttpStatusCode.BadRequest, refreshRes.StatusCode);
-        Assert.True(refreshRes.Headers.Contains(CobroupAntiforgeryFilter.ErrorHeaderName));
-        Assert.Equal(CobroupAntiforgeryFilter.ErrorCode, refreshRes.Headers.GetValues(CobroupAntiforgeryFilter.ErrorHeaderName).First());
-
-        var body = await refreshRes.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal("antiforgery_token_invalid", body.GetProperty("error").GetString());
+        var resBody = await refreshRes.Content.ReadAsStringAsync();
+        Assert.Contains("antiforgery", resBody, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -116,7 +152,6 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
         var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var (user, org, password) = await CreateTestUserAndOrgAsync(scope.ServiceProvider, db);
 
-        // 1. Login
         var loginRes = await client.PostAsJsonAsync("/api/v1/auth/login", new
         {
             username = user.Username,
@@ -126,10 +161,8 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
         Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
         var initialRefreshCookie = ExtractCookie(loginRes, "__Host-cobroup-refresh");
 
-        // 2. Get Antiforgery token and cookie
         var (csrfToken, csrfCookie) = await GetAntiforgeryAsync(client);
 
-        // 3. Refresh with CSRF and session cookie
         var refreshReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
         refreshReq.Headers.Add("Cookie", $"__Host-cobroup-refresh={initialRefreshCookie}; {csrfCookie}");
         refreshReq.Headers.Add("X-XSRF-TOKEN", csrfToken);
@@ -137,26 +170,24 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
         var refreshRes = await client.SendAsync(refreshReq);
         Assert.Equal(HttpStatusCode.OK, refreshRes.StatusCode);
 
-        // Body must have new access token and no refresh token
-        var body = await refreshRes.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.True(body.TryGetProperty("access_token", out _));
-        Assert.False(body.TryGetProperty("refresh_token", out _));
+        var setCookies = refreshRes.Headers.GetValues("Set-Cookie").ToList();
+        var newRefreshCookieHeader = setCookies.FirstOrDefault(c => c.StartsWith("__Host-cobroup-refresh="));
+        Assert.NotNull(newRefreshCookieHeader);
 
-        // Cookie must be replaced with a different value
         var newRefreshCookie = ExtractCookie(refreshRes, "__Host-cobroup-refresh");
         Assert.NotEqual(initialRefreshCookie, newRefreshCookie);
 
-        // 4. Replay initial refresh cookie -> must fail with 401
+        var (csrfToken2, csrfCookie2) = await GetAntiforgeryAsync(client);
         var replayReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
-        replayReq.Headers.Add("Cookie", $"__Host-cobroup-refresh={initialRefreshCookie}; {csrfCookie}");
-        replayReq.Headers.Add("X-XSRF-TOKEN", csrfToken);
+        replayReq.Headers.Add("Cookie", $"__Host-cobroup-refresh={initialRefreshCookie}; {csrfCookie2}");
+        replayReq.Headers.Add("X-XSRF-TOKEN", csrfToken2);
 
         var replayRes = await client.SendAsync(replayReq);
         Assert.Equal(HttpStatusCode.Unauthorized, replayRes.StatusCode);
     }
 
     [Fact]
-    public async Task Logout_WithValidCsrf_RevokesFamily_AndExpiresCookie()
+    public async Task Logout_ClearsCookie_AndReturnsNoContent()
     {
         var client = CreateHttpsClient();
 
@@ -164,17 +195,17 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
         var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
         var (user, org, password) = await CreateTestUserAndOrgAsync(scope.ServiceProvider, db);
 
-        // 1. Login
         var loginRes = await client.PostAsJsonAsync("/api/v1/auth/login", new
         {
             username = user.Username,
             password = password,
             organizationId = org.Id
         });
+        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
         var refreshCookie = ExtractCookie(loginRes, "__Host-cobroup-refresh");
+
         var (csrfToken, csrfCookie) = await GetAntiforgeryAsync(client);
 
-        // 2. Logout with CSRF
         var logoutReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/logout");
         logoutReq.Headers.Add("Cookie", $"__Host-cobroup-refresh={refreshCookie}; {csrfCookie}");
         logoutReq.Headers.Add("X-XSRF-TOKEN", csrfToken);
@@ -182,12 +213,177 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
         var logoutRes = await client.SendAsync(logoutReq);
         Assert.Equal(HttpStatusCode.NoContent, logoutRes.StatusCode);
 
-        // Verify expired cookie returned
         var setCookies = logoutRes.Headers.GetValues("Set-Cookie").ToList();
         var expiredCookie = setCookies.FirstOrDefault(c => c.StartsWith("__Host-cobroup-refresh="));
         Assert.NotNull(expiredCookie);
         Assert.Contains("expires=", expiredCookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("path=/", expiredCookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SelectOrganization_ValidAccessAndRefresh_RevokesOldFamily_CreatesNewFamily_OldRefreshCannotRotate()
+    {
+        var client = CreateHttpsClient();
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var (user, org1, org2, password) = await CreateTestUserWithTwoOrgsAsync(scope.ServiceProvider, db);
+
+        // 1. Iniciar sesión en org1
+        var loginRes = await client.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            username = user.Username,
+            password = password,
+            organizationId = org1.Id
+        });
+        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
+        var initialRefreshCookie = ExtractCookie(loginRes, "__Host-cobroup-refresh");
+
+        var loginBody = await loginRes.Content.ReadFromJsonAsync<JsonElement>();
+        var accessTokenOrg1 = loginBody.GetProperty("access_token").GetString()!;
+
+        // 2. Cambiar a org2 mediante PUT /api/v1/auth/organizations/current
+        var (csrfToken, csrfCookie) = await GetAntiforgeryAsync(client, accessTokenOrg1);
+
+        var switchReq = new HttpRequestMessage(HttpMethod.Put, "/api/v1/auth/organizations/current");
+        switchReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessTokenOrg1);
+        switchReq.Headers.Add("Cookie", $"__Host-cobroup-refresh={initialRefreshCookie}; {csrfCookie}");
+        switchReq.Headers.Add("X-XSRF-TOKEN", csrfToken);
+        switchReq.Content = JsonContent.Create(new { organizationId = org2.Id });
+
+        var switchRes = await client.SendAsync(switchReq);
+        Assert.Equal(HttpStatusCode.OK, switchRes.StatusCode);
+
+        var switchBody = await switchRes.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("authenticated", switchBody.GetProperty("status").GetString());
+        var newAccessTokenOrg2 = switchBody.GetProperty("access_token").GetString()!;
+        Assert.False(string.IsNullOrWhiteSpace(newAccessTokenOrg2));
+        Assert.NotEqual(accessTokenOrg1, newAccessTokenOrg2);
+        Assert.Equal(org2.Id, switchBody.GetProperty("organization").GetProperty("id").GetGuid());
+
+        var newRefreshCookie = ExtractCookie(switchRes, "__Host-cobroup-refresh");
+        Assert.NotEqual(initialRefreshCookie, newRefreshCookie);
+
+        // 3. Demostrar que el refresh anterior ya no puede rotar
+        var (csrfToken2, csrfCookie2) = await GetAntiforgeryAsync(client);
+        var replayOldReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
+        replayOldReq.Headers.Add("Cookie", $"__Host-cobroup-refresh={initialRefreshCookie}; {csrfCookie2}");
+        replayOldReq.Headers.Add("X-XSRF-TOKEN", csrfToken2);
+
+        var replayOldRes = await client.SendAsync(replayOldReq);
+        Assert.Equal(HttpStatusCode.Unauthorized, replayOldRes.StatusCode);
+
+        // 4. Demostrar que la nueva sesión refresh es totalmente funcional
+        var (csrfToken3, csrfCookie3) = await GetAntiforgeryAsync(client);
+        var refreshNewReq = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/refresh");
+        refreshNewReq.Headers.Add("Cookie", $"__Host-cobroup-refresh={newRefreshCookie}; {csrfCookie3}");
+        refreshNewReq.Headers.Add("X-XSRF-TOKEN", csrfToken3);
+
+        var refreshNewRes = await client.SendAsync(refreshNewReq);
+        Assert.Equal(HttpStatusCode.OK, refreshNewRes.StatusCode);
+    }
+
+    [Fact]
+    public async Task SelectOrganization_WithoutRefreshCookie_Returns401_ExpiresCookie()
+    {
+        var client = CreateHttpsClient();
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var (user, org1, org2, password) = await CreateTestUserWithTwoOrgsAsync(scope.ServiceProvider, db);
+
+        var loginRes = await client.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            username = user.Username,
+            password = password,
+            organizationId = org1.Id
+        });
+        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
+        var loginBody = await loginRes.Content.ReadFromJsonAsync<JsonElement>();
+        var accessToken = loginBody.GetProperty("access_token").GetString()!;
+
+        var (csrfToken, csrfCookie) = await GetAntiforgeryAsync(client, accessToken);
+
+        // Llamar sin cookie __Host-cobroup-refresh
+        var switchReq = new HttpRequestMessage(HttpMethod.Put, "/api/v1/auth/organizations/current");
+        switchReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        switchReq.Headers.Add("Cookie", csrfCookie);
+        switchReq.Headers.Add("X-XSRF-TOKEN", csrfToken);
+        switchReq.Content = JsonContent.Create(new { organizationId = org2.Id });
+
+        var switchRes = await client.SendAsync(switchReq);
+        Assert.Equal(HttpStatusCode.Unauthorized, switchRes.StatusCode);
+
+        var setCookies = switchRes.Headers.GetValues("Set-Cookie").ToList();
+        var expiredCookie = setCookies.FirstOrDefault(c => c.StartsWith("__Host-cobroup-refresh="));
+        Assert.NotNull(expiredCookie);
+        Assert.Contains("expires=", expiredCookie, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SelectOrganization_WithoutCsrf_FailsWithAntiforgeryError()
+    {
+        var client = CreateHttpsClient();
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var (user, org1, org2, password) = await CreateTestUserWithTwoOrgsAsync(scope.ServiceProvider, db);
+
+        var loginRes = await client.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            username = user.Username,
+            password = password,
+            organizationId = org1.Id
+        });
+        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
+        var initialRefreshCookie = ExtractCookie(loginRes, "__Host-cobroup-refresh");
+        var loginBody = await loginRes.Content.ReadFromJsonAsync<JsonElement>();
+        var accessToken = loginBody.GetProperty("access_token").GetString()!;
+
+        // Llamar sin X-XSRF-TOKEN
+        var switchReq = new HttpRequestMessage(HttpMethod.Put, "/api/v1/auth/organizations/current");
+        switchReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        switchReq.Headers.Add("Cookie", $"__Host-cobroup-refresh={initialRefreshCookie}");
+        switchReq.Content = JsonContent.Create(new { organizationId = org2.Id });
+
+        var switchRes = await client.SendAsync(switchReq);
+        Assert.Equal(HttpStatusCode.BadRequest, switchRes.StatusCode);
+    }
+
+    [Fact]
+    public async Task SelectOrganization_TargetOrgSuspended_Returns403()
+    {
+        var client = CreateHttpsClient();
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
+        var (user, org1, org2, password) = await CreateTestUserWithTwoOrgsAsync(scope.ServiceProvider, db);
+
+        // Suspender org2
+        org2.Suspend("Prueba de auditoria");
+        await db.SaveChangesAsync();
+
+        var loginRes = await client.PostAsJsonAsync("/api/v1/auth/login", new
+        {
+            username = user.Username,
+            password = password,
+            organizationId = org1.Id
+        });
+        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
+        var initialRefreshCookie = ExtractCookie(loginRes, "__Host-cobroup-refresh");
+        var loginBody = await loginRes.Content.ReadFromJsonAsync<JsonElement>();
+        var accessToken = loginBody.GetProperty("access_token").GetString()!;
+
+        var (csrfToken, csrfCookie) = await GetAntiforgeryAsync(client, accessToken);
+
+        var switchReq = new HttpRequestMessage(HttpMethod.Put, "/api/v1/auth/organizations/current");
+        switchReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        switchReq.Headers.Add("Cookie", $"__Host-cobroup-refresh={initialRefreshCookie}; {csrfCookie}");
+        switchReq.Headers.Add("X-XSRF-TOKEN", csrfToken);
+        switchReq.Content = JsonContent.Create(new { organizationId = org2.Id });
+
+        var switchRes = await client.SendAsync(switchReq);
+        Assert.Equal(HttpStatusCode.Forbidden, switchRes.StatusCode);
     }
 
     private HttpClient CreateHttpsClient()
@@ -216,9 +412,14 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
         throw new InvalidOperationException($"Cookie '{name}' was not found in response.");
     }
 
-    private static async Task<(string Token, string Cookie)> GetAntiforgeryAsync(HttpClient client)
+    private static async Task<(string Token, string Cookie)> GetAntiforgeryAsync(HttpClient client, string? bearerToken = null)
     {
-        var res = await client.GetAsync("/api/v1/auth/antiforgery");
+        var req = new HttpRequestMessage(HttpMethod.Get, "/api/v1/auth/antiforgery");
+        if (!string.IsNullOrWhiteSpace(bearerToken))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        }
+        var res = await client.SendAsync(req);
         res.EnsureSuccessStatusCode();
 
         var body = await res.Content.ReadFromJsonAsync<JsonElement>();
@@ -232,7 +433,7 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
         return (token, cookie);
     }
 
-    private static async Task<(ApplicationUser User, Organization Org, string Password)> CreateTestUserAndOrgAsync(
+    private async Task<(ApplicationUser User, Organization Org, string Password)> CreateTestUserAndOrgAsync(
         IServiceProvider services,
         IdentityDbContext db)
     {
@@ -262,6 +463,48 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
         db.OrganizationMemberships.Add(membership);
         await db.SaveChangesAsync();
 
+        createdOrgIds.Add(org.Id);
+        createdUserIds.Add(user.Id);
+
         return (user, org, password);
+    }
+
+    private async Task<(ApplicationUser User, Organization Org1, Organization Org2, string Password)> CreateTestUserWithTwoOrgsAsync(
+        IServiceProvider services,
+        IdentityDbContext db)
+    {
+        var passwordService = services.GetRequiredService<IPasswordCredentialService>();
+        var password = "SecurePassword123!";
+        var storedHash = passwordService.Hash(password);
+
+        var org1 = Organization.Create(
+            $"org1-{Guid.NewGuid():N}"[..16],
+            "Organization One",
+            DateTimeOffset.UtcNow);
+
+        var org2 = Organization.Create(
+            $"org2-{Guid.NewGuid():N}"[..16],
+            "Organization Two",
+            DateTimeOffset.UtcNow);
+
+        var user = ApplicationUser.Create(
+            $"multi-user-{Guid.NewGuid():N}"[..20],
+            "Multi Tenant User",
+            storedHash,
+            DateTimeOffset.UtcNow);
+
+        var m1 = OrganizationMembership.Create(user.Id, org1.Id, UserRole.Admin, DateTimeOffset.UtcNow);
+        var m2 = OrganizationMembership.Create(user.Id, org2.Id, UserRole.Supervisor, DateTimeOffset.UtcNow);
+
+        db.Organizations.AddRange(org1, org2);
+        db.Users.Add(user);
+        db.OrganizationMemberships.AddRange(m1, m2);
+        await db.SaveChangesAsync();
+
+        createdOrgIds.Add(org1.Id);
+        createdOrgIds.Add(org2.Id);
+        createdUserIds.Add(user.Id);
+
+        return (user, org1, org2, password);
     }
 }

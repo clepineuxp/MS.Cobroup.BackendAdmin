@@ -28,6 +28,11 @@ public sealed class Organization
     public static Organization Create(string code, string name, DateTimeOffset createdAtUtc) =>
         new(Guid.NewGuid(), code, name, createdAtUtc);
 
+    public void Suspend(string? reason = null)
+    {
+        Status = OrganizationStatus.Suspended;
+    }
+
     public static string NormalizeCode(string value) =>
         Require(value, nameof(value), 48).ToUpperInvariant();
 
