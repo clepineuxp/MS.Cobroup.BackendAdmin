@@ -33,6 +33,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
 
     public DbSet<PaymentMethod> PaymentMethods => Set<PaymentMethod>();
 
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -233,6 +235,26 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
                 .WithMany()
                 .HasForeignKey(item => item.OrganizationId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.ToTable("refresh_tokens");
+            entity.HasKey(item => item.Id);
+            entity.Property(item => item.TokenHash).HasMaxLength(64).IsRequired();
+            entity.Property(item => item.ReplacedByTokenHash).HasMaxLength(64);
+            entity.Property(item => item.RevocationReason).HasMaxLength(256);
+            entity.HasIndex(item => item.TokenHash).IsUnique();
+            entity.HasIndex(item => item.FamilyId);
+            entity.HasIndex(item => new { item.UserId, item.ExpiresAtUtc });
+            entity.HasOne<ApplicationUser>()
+                .WithMany()
+                .HasForeignKey(item => item.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Organization>()
+                .WithMany()
+                .HasForeignKey(item => item.OrganizationId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -29,4 +29,37 @@ public interface IIdentityRepository
     Task<IReadOnlyCollection<OrganizationMembership>> ListActiveMembershipsAsync(
         Guid userId,
         CancellationToken cancellationToken);
+
+    Task SaveRefreshTokenAsync(
+        RefreshToken refreshToken,
+        CancellationToken cancellationToken);
+
+    Task<RefreshToken?> FindRefreshTokenByHashAsync(
+        string tokenHash,
+        CancellationToken cancellationToken);
+
+    Task RevokeFamilyAsync(
+        Guid familyId,
+        DateTimeOffset revokedAtUtc,
+        string reason,
+        CancellationToken cancellationToken);
+
+    Task<bool> RotateRefreshTokenAtomicAsync(
+        string currentTokenHash,
+        RefreshToken newToken,
+        DateTimeOffset rotatedAtUtc,
+        CancellationToken cancellationToken);
+
+    Task RevokeRefreshTokenByHashAsync(
+        string tokenHash,
+        DateTimeOffset revokedAtUtc,
+        string? replacedByTokenHash,
+        string? reason,
+        CancellationToken cancellationToken);
+
+    Task RevokeUserRefreshTokensAsync(
+        Guid userId,
+        DateTimeOffset revokedAtUtc,
+        CancellationToken cancellationToken);
 }
+

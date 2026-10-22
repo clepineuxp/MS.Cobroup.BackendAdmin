@@ -1,13 +1,12 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using MS.Cobroup.BackendAdmin.Api.Security;
 using MS.Cobroup.BackendAdmin.Core.Identity;
-using OpenIddict.Abstractions;
-using OpenIddict.Validation.AspNetCore;
+using MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
+using MS.Cobroup.BackendAdmin.Domain.Interfaces.Services;
 
 namespace MS.Cobroup.BackendAdmin.Api.Controllers;
 
@@ -15,6 +14,9 @@ namespace MS.Cobroup.BackendAdmin.Api.Controllers;
 [Route("api/v1/auth")]
 public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
 {
+    private const string HostCookieName = "__Host-cobroup-refresh";
+    private const string FallbackCookieName = "cobroup-refresh";
+
     [HttpGet("antiforgery")]
     public ActionResult<AntiforgeryResponse> GetAntiforgeryToken()
     {
@@ -22,14 +24,22 @@ public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
         return Ok(new AntiforgeryResponse(tokens.RequestToken ?? string.Empty));
     }
 
-    [HttpPost("session")]
+    [HttpGet(".well-known/jwks.json")]
+    [AllowAnonymous]
+    public IActionResult GetJwks([FromServices] IRsaKeyService rsaKeyService)
+    {
+        return Ok(rsaKeyService.GetPublicJwks());
+    }
+
+    [HttpPost("login")]
     [EnableRateLimiting("identity-write")]
-    public async Task<IActionResult> CreateSession(
-        LoginRequest request,
-        AuthenticateUserService authentication,
+    public async Task<IActionResult> Login(
+        [FromBody] LoginRequest request,
+        [FromServices] AuthenticateUserService authentication,
+        [FromServices] ITokenService tokenService,
+        [FromServices] IIdentityRepository identityRepository,
         CancellationToken cancellationToken)
     {
-        await antiforgery.ValidateRequestAsync(HttpContext);
         var result = await authentication.ExecuteAsync(
             request.Username,
             request.Password,
@@ -37,41 +47,157 @@ public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
 
         if (result.Outcome is AuthenticationOutcome.InvalidCredentials)
         {
-            return Unauthorized();
+            return Unauthorized(new { message = "Credenciales inválidas." });
         }
 
-        await HttpContext.SignInAsync(
-            AuthenticationSchemes.AuthorityCookie,
-            AuthorityPrincipalFactory.Create(result.User!, result.Membership));
+        if (result.Outcome is AuthenticationOutcome.MembershipRequired || result.Membership is null)
+        {
+            return Ok(new
+            {
+                status = "membership_required",
+                userId = result.User!.Id
+            });
+        }
 
-        return result.Outcome is AuthenticationOutcome.MembershipRequired
-            ? Ok(new LoginResponse("membership_required"))
-            : NoContent();
+        var membership = result.Membership;
+        if (request.OrganizationId.HasValue)
+        {
+            var specific = await identityRepository.SelectMembershipAsync(
+                result.User!.Id,
+                request.OrganizationId.Value,
+                DateTimeOffset.UtcNow,
+                cancellationToken);
+
+            if (specific is null || !specific.IsActive)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    message = "La organización solicitada no corresponde a una membresía activa del usuario."
+                });
+            }
+
+            membership = specific;
+        }
+
+        var tokens = await tokenService.IssueTokensAsync(result.User!, membership, null, cancellationToken);
+
+        SetRefreshTokenCookie(tokens.RawRefreshToken);
+
+        return Ok(new
+        {
+            status = "authenticated",
+            access_token = tokens.AccessToken,
+            expires_in = tokens.ExpiresIn,
+            token_type = tokens.TokenType,
+            user = new
+            {
+                id = result.User!.Id,
+                username = result.User.Username,
+                displayName = result.User.DisplayName
+            },
+            organization = new
+            {
+                id = membership.OrganizationId,
+                code = membership.Organization?.Code,
+                name = membership.Organization?.Name,
+                role = membership.Role.ToString()
+            }
+        });
     }
 
-    [HttpDelete("session")]
-    public async Task<IActionResult> DeleteSession()
+    [HttpPost("refresh")]
+    [EnableRateLimiting("identity-write")]
+    public async Task<IActionResult> Refresh(
+        [FromServices] ITokenService tokenService,
+        CancellationToken cancellationToken)
     {
-        await antiforgery.ValidateRequestAsync(HttpContext);
-        await HttpContext.SignOutAsync(AuthenticationSchemes.AuthorityCookie);
+        var rawRefreshToken = GetRefreshTokenFromCookie();
+        if (string.IsNullOrWhiteSpace(rawRefreshToken))
+        {
+            return Unauthorized(new { message = "Cookie de token de refresco ausente o inválida." });
+        }
+
+        var result = await tokenService.RefreshTokensAsync(rawRefreshToken, cancellationToken);
+        if (!result.Success)
+        {
+            ClearRefreshTokenCookie();
+            return Unauthorized(new { message = result.Error ?? "Token de refresco inválido o expirado." });
+        }
+
+        SetRefreshTokenCookie(result.RawRefreshToken!);
+
+        return Ok(new
+        {
+            access_token = result.AccessToken,
+            expires_in = result.ExpiresIn,
+            token_type = "Bearer"
+        });
+    }
+
+    [HttpPost("logout")]
+    [EnableRateLimiting("identity-write")]
+    public async Task<IActionResult> Logout(
+        [FromServices] ITokenService tokenService,
+        CancellationToken cancellationToken)
+    {
+        var rawRefreshToken = GetRefreshTokenFromCookie();
+        if (!string.IsNullOrWhiteSpace(rawRefreshToken))
+        {
+            await tokenService.RevokeFamilyByTokenAsync(rawRefreshToken, "Usuario cerró sesión", cancellationToken);
+        }
+
+        ClearRefreshTokenCookie();
         return NoContent();
     }
 
     [HttpGet("me")]
-    [Authorize(AuthenticationSchemes = OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)]
+    [Authorize]
     public IActionResult GetCurrentUser() => Ok(new
     {
-        userId = User.FindFirstValue(OpenIddictConstants.Claims.Subject),
+        userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub") ?? User.FindFirstValue("user_id"),
         organizationId = User.FindFirstValue("organization_id"),
         organizationCode = User.FindFirstValue("organization_code"),
-        username = User.FindFirstValue(OpenIddictConstants.Claims.PreferredUsername),
-        displayName = User.FindFirstValue(OpenIddictConstants.Claims.Name),
-        role = User.FindFirstValue(OpenIddictConstants.Claims.Role)
+        username = User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue("preferred_username") ?? User.FindFirstValue("unique_name"),
+        displayName = User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue("name"),
+        role = User.FindFirstValue(ClaimTypes.Role) ?? User.FindFirstValue("role")
     });
+
+    private void SetRefreshTokenCookie(string refreshToken)
+    {
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Path = "/api/v1/auth",
+            Expires = DateTimeOffset.UtcNow.AddDays(30)
+        };
+
+        Response.Cookies.Append(HostCookieName, refreshToken, cookieOptions);
+        Response.Cookies.Append(FallbackCookieName, refreshToken, cookieOptions);
+    }
+
+    private void ClearRefreshTokenCookie()
+    {
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Path = "/api/v1/auth",
+            Expires = DateTimeOffset.UtcNow.AddDays(-1)
+        };
+
+        Response.Cookies.Delete(HostCookieName, cookieOptions);
+        Response.Cookies.Delete(FallbackCookieName, cookieOptions);
+    }
+
+    private string? GetRefreshTokenFromCookie()
+    {
+        return Request.Cookies[HostCookieName] ?? Request.Cookies[FallbackCookieName];
+    }
 }
 
 public sealed record AntiforgeryResponse(string RequestToken);
 
-public sealed record LoginRequest(string Username, string Password);
-
-public sealed record LoginResponse(string Status);
+public sealed record LoginRequest(string Username, string Password, Guid? OrganizationId = null);

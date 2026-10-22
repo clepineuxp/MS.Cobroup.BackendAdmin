@@ -161,6 +161,69 @@ public sealed class IdentityServicesTests
             return Task.FromResult(result);
         }
 
+        public List<RefreshToken> RefreshTokens { get; } = [];
+
+        public Task SaveRefreshTokenAsync(RefreshToken refreshToken, CancellationToken cancellationToken)
+        {
+            RefreshTokens.Add(refreshToken);
+            return Task.CompletedTask;
+        }
+
+        public Task<RefreshToken?> FindRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken) =>
+            Task.FromResult(RefreshTokens.SingleOrDefault(t => t.TokenHash == tokenHash));
+
+        public Task RevokeFamilyAsync(Guid familyId, DateTimeOffset revokedAtUtc, string reason, CancellationToken cancellationToken)
+        {
+            foreach (var token in RefreshTokens.Where(t => t.FamilyId == familyId && t.RevokedAtUtc == null))
+            {
+                token.Revoke(revokedAtUtc, reason: reason);
+            }
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> RotateRefreshTokenAtomicAsync(
+            string currentTokenHash,
+            RefreshToken newToken,
+            DateTimeOffset rotatedAtUtc,
+            CancellationToken cancellationToken)
+        {
+            var existing = RefreshTokens.SingleOrDefault(t => t.TokenHash == currentTokenHash);
+            if (existing is null) return Task.FromResult(false);
+            if (!existing.IsActive)
+            {
+                foreach (var token in RefreshTokens.Where(t => t.FamilyId == existing.FamilyId && t.RevokedAtUtc == null))
+                {
+                    token.Revoke(rotatedAtUtc, reason: "Replay attack detected during rotation");
+                }
+                return Task.FromResult(false);
+            }
+
+            existing.Revoke(rotatedAtUtc, replacedByTokenHash: newToken.TokenHash, reason: "Rotated");
+            RefreshTokens.Add(newToken);
+            return Task.FromResult(true);
+        }
+
+        public Task RevokeRefreshTokenByHashAsync(
+            string tokenHash,
+            DateTimeOffset revokedAtUtc,
+            string? replacedByTokenHash,
+            string? reason,
+            CancellationToken cancellationToken)
+        {
+            var existing = RefreshTokens.SingleOrDefault(t => t.TokenHash == tokenHash);
+            existing?.Revoke(revokedAtUtc, replacedByTokenHash, reason);
+            return Task.CompletedTask;
+        }
+
+        public Task RevokeUserRefreshTokensAsync(Guid userId, DateTimeOffset revokedAtUtc, CancellationToken cancellationToken)
+        {
+            foreach (var token in RefreshTokens.Where(t => t.UserId == userId && t.IsActive))
+            {
+                token.Revoke(revokedAtUtc, reason: "Revoked for user");
+            }
+            return Task.CompletedTask;
+        }
+
         private static void SetOrganizationNavigation(
             IReadOnlyCollection<OrganizationMembership> memberships,
             Organization organization)

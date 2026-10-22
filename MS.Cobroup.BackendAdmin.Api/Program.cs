@@ -1,11 +1,14 @@
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.IdentityModel.Tokens;
 using MS.Cobroup.BackendAdmin.Api.Health;
 using MS.Cobroup.BackendAdmin.Api.Security;
 using MS.Cobroup.BackendAdmin.Core.Agenda;
@@ -27,8 +30,6 @@ using MS.Cobroup.BackendAdmin.Infrastructure.Customers;
 using MS.Cobroup.BackendAdmin.Infrastructure.LoanExceptions;
 using MS.Cobroup.BackendAdmin.Infrastructure.Loans;
 using MS.Cobroup.BackendAdmin.Infrastructure.Security;
-using OpenIddict.Abstractions;
-using OpenIddict.Validation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("IdentityDatabase")
@@ -46,18 +47,16 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("tenant-admin", policy =>
     {
-        policy.AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
         policy.RequireAuthenticatedUser();
         policy.RequireRole(UserRole.Admin.ToString());
         policy.RequireClaim("organization_id");
     });
     options.AddPolicy("tenant-user", policy =>
     {
-        policy.AddAuthenticationSchemes(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+        policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
         policy.RequireAuthenticatedUser();
-        policy.RequireClaim(OpenIddictConstants.Claims.Subject);
         policy.RequireClaim("organization_id");
-        policy.RequireClaim(OpenIddictConstants.Claims.Role);
     });
 });
 builder.Services.AddAntiforgery(options =>
@@ -85,82 +84,20 @@ builder.Services.AddDbContext<IdentityDbContext>(options =>
 {
     options.UseNpgsql(connectionString, postgres =>
         postgres.MigrationsAssembly(typeof(IdentityDbContext).Assembly.FullName));
-    options.UseOpenIddict<Guid>();
 });
 
-builder.Services.AddAuthentication(options =>
+var rsaKeyService = new RsaKeyService(builder.Configuration, builder.Environment);
+builder.Services.AddSingleton<IRsaKeyService>(rsaKeyService);
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
-        options.DefaultAuthenticateScheme = AuthenticationSchemes.AuthorityCookie;
-        options.DefaultChallengeScheme = AuthenticationSchemes.AuthorityCookie;
-        options.DefaultSignInScheme = AuthenticationSchemes.AuthorityCookie;
-    })
-    .AddCookie(AuthenticationSchemes.AuthorityCookie, options =>
-    {
-        options.Cookie.Name = "__Host-cobroup-authority";
-        options.Cookie.HttpOnly = true;
-        options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-        options.ExpireTimeSpan = TimeSpan.FromHours(8);
-        options.SlidingExpiration = true;
-        options.Events.OnRedirectToLogin = context =>
-        {
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return Task.CompletedTask;
-        };
-        options.Events.OnRedirectToAccessDenied = context =>
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return Task.CompletedTask;
-        };
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+        options.SaveToken = true;
+        options.TokenValidationParameters = rsaKeyService.TokenValidationParameters;
     });
 
-builder.Services.AddOpenIddict()
-    .AddCore(options =>
-        options.UseEntityFrameworkCore()
-            .UseDbContext<IdentityDbContext>()
-            .ReplaceDefaultEntities<Guid>())
-    .AddServer(options =>
-    {
-        options.SetIssuer(new Uri(issuer, UriKind.Absolute));
-        options.SetAuthorizationEndpointUris("connect/authorize");
-        options.SetTokenEndpointUris("connect/token");
-        options.SetRevocationEndpointUris("connect/revocation");
-        options.SetEndSessionEndpointUris("connect/logout");
-        options.SetUserInfoEndpointUris("connect/userinfo");
-        options.AllowAuthorizationCodeFlow();
-        options.AllowRefreshTokenFlow();
-        options.RequireProofKeyForCodeExchange();
-        options.SetAccessTokenLifetime(TimeSpan.FromMinutes(5));
-        options.SetRefreshTokenLifetime(TimeSpan.FromDays(30));
-        options.RegisterScopes(
-            OpenIddictConstants.Scopes.OpenId,
-            OpenIddictConstants.Scopes.Profile,
-            OpenIddictConstants.Scopes.OfflineAccess,
-            "cobroup-api");
-        options.DisableAccessTokenEncryption();
-
-        if (builder.Environment.IsDevelopment())
-        {
-            options.AddDevelopmentEncryptionCertificate();
-            options.AddDevelopmentSigningCertificate();
-        }
-        else
-        {
-            options.AddSigningCertificate(LoadCertificate(builder.Configuration, "Signing"));
-            options.AddEncryptionCertificate(LoadCertificate(builder.Configuration, "Encryption"));
-        }
-
-        options.UseAspNetCore()
-            .EnableTokenEndpointPassthrough()
-            .EnableAuthorizationEndpointPassthrough()
-            .EnableEndSessionEndpointPassthrough()
-            .EnableUserInfoEndpointPassthrough();
-    })
-    .AddValidation(options =>
-    {
-        options.UseLocalServer();
-        options.UseAspNetCore();
-    });
+builder.Services.AddScoped<ITokenService, JwtTokenService>();
 
 builder.Services.AddScoped<IIdentityRepository, EfIdentityRepository>();
 builder.Services.AddScoped<IRouteManagementRepository, EfRouteManagementRepository>();
@@ -228,7 +165,6 @@ builder.Services.AddHttpClient<IOperationalAgendaDirectory, OperationalAgendaDir
 }).AddHttpMessageHandler<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
 
 builder.Services.AddSingleton<IAdministrativeScopeAuthorizer, AdministrativeScopeAuthorizer>();
-builder.Services.AddHostedService<OidcClientSeeder>();
 
 var app = builder.Build();
 
@@ -236,8 +172,19 @@ var forwardedOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 };
-forwardedOptions.KnownIPNetworks.Clear();
-forwardedOptions.KnownProxies.Clear();
+var knownProxiesConfig = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>()
+    ?? ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.1"];
+foreach (var proxy in knownProxiesConfig)
+{
+    if (System.Net.IPAddress.TryParse(proxy, out var ip))
+    {
+        forwardedOptions.KnownProxies.Add(ip);
+    }
+    else if (System.Net.IPNetwork.TryParse(proxy, out var network))
+    {
+        forwardedOptions.KnownIPNetworks.Add(network);
+    }
+}
 app.UseForwardedHeaders(forwardedOptions);
 
 app.Use(async (context, next) =>
@@ -273,30 +220,5 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = r => r
 app.MapControllers();
 
 app.Run();
-
-static X509Certificate2 LoadCertificate(IConfiguration configuration, string purpose)
-{
-    var base64 = configuration[$"Identity:Certificates:{purpose}:Base64"];
-    var path = configuration[$"Identity:Certificates:{purpose}:Path"];
-    var password = configuration[$"Identity:Certificates:{purpose}:Password"];
-
-    if (!string.IsNullOrWhiteSpace(base64))
-    {
-        var bytes = Convert.FromBase64String(base64.Trim());
-        return string.IsNullOrWhiteSpace(password)
-            ? X509CertificateLoader.LoadPkcs12(bytes, (string?)null)
-            : X509CertificateLoader.LoadPkcs12(bytes, password);
-    }
-
-    if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-    {
-        return string.IsNullOrWhiteSpace(password)
-            ? X509CertificateLoader.LoadPkcs12FromFile(path, (string?)null)
-            : X509CertificateLoader.LoadPkcs12FromFile(path, password);
-    }
-
-    throw new InvalidOperationException(
-        $"Identity:Certificates:{purpose}: either Base64 or an existing file Path is required outside Development.");
-}
 
 public partial class Program;

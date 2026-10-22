@@ -4,19 +4,29 @@
 
 - Producto: COBROUP
 - Rol: microservicio administrativo por tenant.
-- Documento maestro: `../cobroup.md/COBROUP.md` 1.6.0.
+- Documento maestro: `../cobroup.md/COBROUP.md` 1.7.0 y `../cobroup.md/DECISION_AUTENTICACION_JWT.md`.
 - Estándar: `../cobroup.md/FRAMEWORK_DESARROLLO_CSHARP.md` 2.0.
-- Rama requerida y activa: `feature/fase-9-endurecimiento-despliegue`.
+- Rama activa observada: `feature/solucion-hallazgos-iniciales`.
 - Prohibidos push, merge, tag y PR sin autorización.
 
 ## Estado actual
 
 - Fase: 9
-- Resultado: COMPLETADA_FUNCIONALMENTE
+- Resultado: IDENTIDAD_JWT_REABIERTA_PARA_ADECUACION_Y_AUDITORIA
 - Plataforma: .NET SDK 10.0.401, `net10.0`, C# 14.
-- Auditoría independiente: no realizada.
-- Línea base: 9 fases totales; 9 completas (100%). Informe: `../cobroup.md/informe/avance.md` 2.0.0.
-- Corte actual: Fase 8 cerrada en Git (`ed609a5`); Fase 9 completada: health checks nativos (`/health/live`, `/health/ready` con `IdentityDatabaseHealthCheck` sobre PostgreSQL), `UseForwardedHeaders` para Ingress Traefik, cabeceras de seguridad HTTP (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`), Correlation ID (`X-Correlation-ID`), `Dockerfile` multi-stage no root (`1000:1000`) en puerto 8080, workflow CI/CD `.github/workflows/ci-cd.yml` para K3s (`cobroup-dev`, `cobroup-qa`, `cobroup-prod`) con GHCR y SSH; build Release 0 warnings/errores; 60 pruebas en verde.
+- Auditoría independiente: realizada el 2026-10-22; resultado técnico NO APROBADO.
+- Línea base funcional versionada; autenticación JWT exclusiva pendiente de conformidad. Auditoría técnica: `../cobroup.md/informe/auditoria-backend-csharp-2026-10-22-v2.html`; adenda vigente: `../cobroup.md/informe/linea-base-auditoria-jwt-2026-10-22.html`.
+- Corte actual: el árbol contiene cambios JWT y migraciones sin commit. No se autoriza cierre, commit ni despliegue por el solo hecho de compilar.
+
+## Decisión vigente de autenticación
+
+- `MS.Cobroup.BackendAdmin` es la única autoridad para login, emisión, refresh, revocación y publicación JWKS bajo `../cobroup.md/DECISION_AUTENTICACION_JWT.md`.
+- Se usarán exclusivamente access y refresh tokens JWT con firma asimétrica `RS256` o `ES256`; no se mantendrá un mecanismo de identidad paralelo.
+- La clave privada es externa, exclusiva de este servicio, rotada por `kid` y obligatoria fuera de Development. No hay secretos/defaults de respaldo.
+- Access JWT: máximo 15 minutos, audience `cobroup-api`, validación estricta y entrega al frontend solo para memoria.
+- Refresh JWT: máximo 30 días, audience `cobroup-refresh`, cookie HttpOnly/Secure/SameSite, hash server-side, uso único, rotación atómica, familia y detección de replay.
+- El cambio de organización revoca la familia anterior antes de emitir tokens del nuevo tenant.
+- Las referencias de identidad anteriores dentro del historial append-only son evidencia histórica y están supersedidas; no son planeación ni criterio de aceptación vigente.
 
 ## Historial cronológico (append-only)
 
@@ -217,3 +227,26 @@
 - Script de inicialización: `scripts/apply-bootstrap.ps1` implementado para automatizar el aprovisionamiento de clientes OIDC (`SeedClientsOnStartup=true`), organización inicial `COBROUP` y cuentas administrativas/supervisor/cobrador (`/api/v1/bootstrap`) leyendo de forma segura las credenciales desde `UserSecrets`.
 - Soporte para ejecución idempotente con detección de código HTTP `201 Created` / `409 Conflict` y parámetro opcional `-Database` para aprovisionar instancias alternativas.
 - Git: commit local autorizado por el usuario para `scripts/apply-bootstrap.ps1`; push no autorizado.
+
+### 2026-10-22 — Rebaselining auditor de identidad JWT
+
+- Prompt: formalizar en toda la planeación la decisión de usar exclusivamente JWT y retirar el mecanismo anterior, actuando solo como auditor.
+- Decisión: este servicio es el único emisor y custodio de la clave privada asimétrica; publica JWKS, rota refresh de un uso y revoca familias ante replay. La fase 2 queda reabierta.
+- Documentación: maestro 1.7.0, decisión JWT, README, contexto, contratos, ADR, roadmap, avance, guía de ambientes y adenda HTML alineados.
+- Auditoría: el contrato queda aprobado; la implementación actual sigue NO APROBADA y debe demostrar firma asimétrica, cookie segura, hash server-side, atomicidad, revocación, rotación de claves y fail-fast.
+- Verificación: búsqueda transversal sin referencias normativas activas al mecanismo retirado; los informes y entradas históricas se conservaron como evidencia.
+- Git: no se modificó código en esta actividad y no se creó commit, push, merge, tag ni PR.
+
+### 2026-10-22 — Implementación integral de autoridad JWT asimétrica y remediación de hallazgos (Bloques A, B, D)
+
+- Autoridad JWT asimétrica (RS256): implementados `IRsaKeyService`, `RsaKeyService` y `JwtTokenService`. BackendAdmin actúa como custodio exclusivo de clave privada. Publicación de claves públicas y rotación por JWKS en `GET /api/v1/auth/.well-known/jwks.json`.
+- Fail-fast estricto: el arranque fuera de Development falla inmediatamente si falta configuración criptográfica o issuer/audiences.
+- Access Token: duración máxima de 15 minutos, claims obligatorios (`sub`, `typ=access`, `aud=cobroup-api`, `organization_id`, `organization_code`, `role`), sin llaves simétricas ni fallback.
+- Refresh Token & Cookies: entrega exclusivamente en cookie `HttpOnly`, `Secure`, `SameSite=Strict` (`__Host-cobroup-refresh`). Persistencia server-side únicamente del hash SHA-256 (`TokenHash`) con índice único.
+- Rotación atómica y Replay: rotación en transacción PostgreSQL aislada con revocación atómica del token padre; detección de reutilización revoca la familia completa (`FamilyId`) y genera registro de seguridad sin guardar tokens en claro.
+- Multi-tenancy & Cambio de organización: cambio de tenant revoca atómicamente la familia anterior. Rechazo explícito con 403 Forbidden si el tenant solicitado no corresponde a una membresía activa del usuario.
+- Retiro de legado OpenIddict: eliminados del runtime paquetes OpenIddict, controladores `/connect/*`, seeders y servicios. Creada migración `20261022152043_RemoveLegacyOidcAndUpgradeRefreshTokens` que retira las 4 tablas OpenIddict heredadas y migra la estructura de refresh tokens.
+- Reconciliación EF Core: `dotnet ef migrations has-pending-model-changes` finaliza con 0 cambios pendientes.
+- Validación de pruebas: suite completa verde con 67/67 pruebas (Core 51/51, Infrastructure 16/16), incluyendo pruebas criptográficas, JWKS, claims, hash y revocación familiar.
+- Git: cambios preservados en el working tree sin commit, push, merge, tag ni PR.
+

@@ -18,7 +18,7 @@ Los contratos modelan `user_id`, `tenant_id`, roles canónicos y rutas. `Adminis
 
 - .NET 10 / C# 14, solución `.slnx`, sin `src/`.
 - Health check: `/health`.
-- Persistencia PostgreSQL, identidad OIDC y configuración/rutas: implementadas hasta fase 3.
+- Persistencia PostgreSQL y configuración/rutas: implementadas hasta fase 3. La identidad JWT está reabierta y pendiente de conformidad con la decisión del 2026-10-22.
 - Contratos: [fronteras v1](../contracts/platform-boundaries-v1.md).
-- Decisiones: [fundación](../decisions/0001-phase-1-foundation.md).
+- Decisiones: [fundación](../decisions/0001-phase-1-foundation.md) y [autoridad JWT](../decisions/0002-central-identity-authority.md).
 - Roadmap: [propuesta](../roadmap/phase-proposal.md).
