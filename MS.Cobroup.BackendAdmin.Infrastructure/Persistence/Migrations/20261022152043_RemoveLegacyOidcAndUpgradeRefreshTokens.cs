@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -26,6 +26,8 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
             migrationBuilder.DropIndex(
                 name: "IX_refresh_tokens_Token",
                 table: "refresh_tokens");
+
+            migrationBuilder.Sql("DELETE FROM refresh_tokens;");
 
             migrationBuilder.DropColumn(
                 name: "ReplacedByToken",
