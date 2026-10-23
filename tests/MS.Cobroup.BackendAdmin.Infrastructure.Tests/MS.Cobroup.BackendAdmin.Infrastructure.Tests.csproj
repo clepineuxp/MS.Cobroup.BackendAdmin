@@ -22,9 +22,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\MS.Cobroup.BackendAdmin.Api\MS.Cobroup.BackendAdmin.Api.csproj" />
     <ProjectReference Include="..\..\MS.Cobroup.BackendAdmin.Infrastructure\MS.Cobroup.BackendAdmin.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\..\MS.Cobroup.Backend\MS.Cobroup.Backend.Api\MS.Cobroup.Backend.Api.csproj">
-      <Aliases>BackendApi</Aliases>
-    </ProjectReference>
   </ItemGroup>
 
 </Project>
