@@ -211,7 +211,7 @@ var app = builder.Build();
 
 if (args.Length > 0 && (args.Contains("--revoke-kid") || args.Contains("--revoke-all")))
 {
-    var exitCode = await ExecuteRevocationCliAsync(app.Services, args);
+    var exitCode = await Program.RunRevocationCliAsync(app.Services, args);
     return exitCode;
 }
 
@@ -270,42 +270,53 @@ app.MapControllers();
 await app.RunAsync();
 return 0;
 
-static async Task<int> ExecuteRevocationCliAsync(IServiceProvider services, string[] cliArgs)
+public partial class Program
 {
-    using var scope = services.CreateScope();
-    var revocationService = scope.ServiceProvider.GetRequiredService<IOperationalSessionRevocationService>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("RevocationCli");
-    var correlationId = Guid.NewGuid().ToString("D");
-
-    try
+    public static async Task<int> RunRevocationCliAsync(IServiceProvider services, string[] cliArgs)
     {
-        if (cliArgs.Contains("--revoke-all"))
+        using var scope = services.CreateScope();
+        var revocationService = scope.ServiceProvider.GetRequiredService<IOperationalSessionRevocationService>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("RevocationCli");
+        var correlationId = Guid.NewGuid().ToString("D");
+
+        try
         {
-            var result = await revocationService.RevokeAllAsync(correlationId);
-            logger.LogWarning("[REVOCATION_EMERGENCY] AffectedCount: {AffectedCount}, CorrelationId: {CorrelationId}", result.AffectedCount, correlationId);
-            Console.WriteLine($"{{\"action\":\"revoke-all\",\"signingKeyId\":\"*\",\"affectedCount\":{result.AffectedCount},\"timestampUtc\":\"{result.TimestampUtc:O}\",\"correlationId\":\"{correlationId}\",\"status\":\"SUCCESS\"}}");
+            if (cliArgs.Contains("--revoke-all"))
+            {
+                var result = await revocationService.RevokeAllAsync(correlationId);
+                logger.LogWarning("[REVOCATION_EMERGENCY] AffectedCount: {AffectedCount}, CorrelationId: {CorrelationId}", result.AffectedCount, correlationId);
+                Console.WriteLine($"{{\"action\":\"revoke-all\",\"signingKeyId\":\"*\",\"affectedCount\":{result.AffectedCount},\"timestampUtc\":\"{result.TimestampUtc:O}\",\"correlationId\":\"{correlationId}\",\"status\":\"SUCCESS\"}}");
+                return 0;
+            }
+
+            var kidIndex = Array.IndexOf(cliArgs, "--revoke-kid");
+            string kid = string.Empty;
+            if (kidIndex >= 0 && kidIndex + 1 < cliArgs.Length && !cliArgs[kidIndex + 1].StartsWith("--"))
+            {
+                kid = cliArgs[kidIndex + 1]?.Trim() ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(kid))
+            {
+                kid = Environment.GetEnvironmentVariable("JWT_REVOKE_KID")?.Trim() ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(kid))
+            {
+                Console.Error.WriteLine($"{{\"action\":\"revoke-kid\",\"error\":\"Argumento --revoke-kid requiere un parámetro kid (proporcionado como argumento o en variable de entorno JWT_REVOKE_KID).\",\"correlationId\":\"{correlationId}\",\"status\":\"ERROR\"}}");
+                return 1;
+            }
+
+            var resultKid = await revocationService.RevokeBySigningKeyIdAsync(kid, correlationId);
+            logger.LogInformation("[REVOCATION_SUCCESS] SigningKeyId: {SigningKeyId}, AffectedCount: {AffectedCount}, CorrelationId: {CorrelationId}", resultKid.SigningKeyId, resultKid.AffectedCount, correlationId);
+            Console.WriteLine($"{{\"action\":\"revoke-kid\",\"signingKeyId\":\"{resultKid.SigningKeyId}\",\"affectedCount\":{resultKid.AffectedCount},\"timestampUtc\":\"{resultKid.TimestampUtc:O}\",\"correlationId\":\"{correlationId}\",\"status\":\"SUCCESS\"}}");
             return 0;
         }
-
-        var kidIndex = Array.IndexOf(cliArgs, "--revoke-kid");
-        if (kidIndex < 0 || kidIndex + 1 >= cliArgs.Length)
+        catch (Exception ex)
         {
-            Console.Error.WriteLine($"{{\"action\":\"revoke-kid\",\"error\":\"Argumento --revoke-kid requiere un parámetro kid.\",\"correlationId\":\"{correlationId}\",\"status\":\"ERROR\"}}");
+            logger.LogError(ex, "Error durante la ejecución del comando de revocación. CorrelationId: {CorrelationId}", correlationId);
+            Console.Error.WriteLine($"{{\"error\":\"{ex.Message}\",\"correlationId\":\"{correlationId}\",\"status\":\"ERROR\"}}");
             return 1;
         }
-
-        var kid = cliArgs[kidIndex + 1]?.Trim() ?? string.Empty;
-        var resultKid = await revocationService.RevokeBySigningKeyIdAsync(kid, correlationId);
-        logger.LogInformation("[REVOCATION_SUCCESS] SigningKeyId: {SigningKeyId}, AffectedCount: {AffectedCount}, CorrelationId: {CorrelationId}", resultKid.SigningKeyId, resultKid.AffectedCount, correlationId);
-        Console.WriteLine($"{{\"action\":\"revoke-kid\",\"signingKeyId\":\"{resultKid.SigningKeyId}\",\"affectedCount\":{resultKid.AffectedCount},\"timestampUtc\":\"{resultKid.TimestampUtc:O}\",\"correlationId\":\"{correlationId}\",\"status\":\"SUCCESS\"}}");
-        return 0;
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error durante la ejecución del comando de revocación. CorrelationId: {CorrelationId}", correlationId);
-        Console.Error.WriteLine($"{{\"error\":\"{ex.Message}\",\"correlationId\":\"{correlationId}\",\"status\":\"ERROR\"}}");
-        return 1;
     }
 }
-
-public partial class Program;

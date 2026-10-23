@@ -1,16 +1,20 @@
 extern alias BackendApi;
+using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using MS.Cobroup.BackendAdmin.Api.Security;
 using MS.Cobroup.BackendAdmin.Core.Identity;
 using MS.Cobroup.BackendAdmin.Domain.Authorization;
 using MS.Cobroup.BackendAdmin.Domain.Identity;
+using MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
 using MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
 using BackendSymmetricValidationService = BackendApi::MS.Cobroup.Backend.Api.Security.SymmetricTokenValidationService;
 using Xunit;
@@ -255,6 +259,145 @@ public sealed class B21MandatoryRotationTests
         // Token k2 emitido con la nueva clave debe ser ACEPTADO por Backend
         var principalK2AfterRetire = handler.ValidateToken(jwtK2, backendValidatorRetired.TokenValidationParameters, out _);
         Assert.NotNull(principalK2AfterRetire);
+    }
+
+    // 6. CLI de revocación: --revoke-kid con argumento
+    [Fact]
+    public async Task Test06_Cli_RevokeKid_WithCommandLineArg_RevokesOnlyTargetKid()
+    {
+        var repo = new TestIdentityRepository();
+        var (user, membership) = CreateUserAndMembership(repo);
+        var now = DateTimeOffset.UtcNow;
+
+        var tokenK1 = new RefreshToken(Guid.NewGuid(), user.Id, membership.OrganizationId, "hash-k1", now.AddDays(7), now, "k1");
+        var tokenK2 = new RefreshToken(Guid.NewGuid(), user.Id, membership.OrganizationId, "hash-k2", now.AddDays(7), now, "k2");
+        repo.RefreshTokens.Add(tokenK1);
+        repo.RefreshTokens.Add(tokenK2);
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IIdentityRepository>(repo);
+        services.AddSingleton<IOperationalSessionRevocationService, OperationalSessionRevocationService>();
+        services.AddLogging();
+        var sp = services.BuildServiceProvider();
+
+        var exitCode = await global::Program.RunRevocationCliAsync(sp, ["--revoke-kid", "k1"]);
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(tokenK1.RevokedAtUtc);
+        Assert.Null(tokenK2.RevokedAtUtc);
+    }
+
+    // 7. CLI de revocación: --revoke-kid con variable de entorno JWT_REVOKE_KID
+    [Fact]
+    public async Task Test07_Cli_RevokeKid_WithEnvironmentVariable_RevokesOnlyTargetKid()
+    {
+        var repo = new TestIdentityRepository();
+        var (user, membership) = CreateUserAndMembership(repo);
+        var now = DateTimeOffset.UtcNow;
+
+        var tokenK1 = new RefreshToken(Guid.NewGuid(), user.Id, membership.OrganizationId, "hash-k1", now.AddDays(7), now, "k1");
+        var tokenK2 = new RefreshToken(Guid.NewGuid(), user.Id, membership.OrganizationId, "hash-k2", now.AddDays(7), now, "k2");
+        repo.RefreshTokens.Add(tokenK1);
+        repo.RefreshTokens.Add(tokenK2);
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IIdentityRepository>(repo);
+        services.AddSingleton<IOperationalSessionRevocationService, OperationalSessionRevocationService>();
+        services.AddLogging();
+        var sp = services.BuildServiceProvider();
+
+        Environment.SetEnvironmentVariable("JWT_REVOKE_KID", "k1");
+        try
+        {
+            var exitCode = await global::Program.RunRevocationCliAsync(sp, ["--revoke-kid"]);
+            Assert.Equal(0, exitCode);
+            Assert.NotNull(tokenK1.RevokedAtUtc);
+            Assert.Null(tokenK2.RevokedAtUtc);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("JWT_REVOKE_KID", null);
+        }
+    }
+
+    // 8. CLI de revocación: --revoke-kid sin argumento ni variable de entorno falla con código 1
+    [Fact]
+    public async Task Test08_Cli_RevokeKid_WithoutArgOrEnv_ReturnsExitCode1()
+    {
+        var repo = new TestIdentityRepository();
+        var services = new ServiceCollection();
+        services.AddSingleton<IIdentityRepository>(repo);
+        services.AddSingleton<IOperationalSessionRevocationService, OperationalSessionRevocationService>();
+        services.AddLogging();
+        var sp = services.BuildServiceProvider();
+
+        Environment.SetEnvironmentVariable("JWT_REVOKE_KID", null);
+        var exitCode = await global::Program.RunRevocationCliAsync(sp, ["--revoke-kid"]);
+
+        Assert.Equal(1, exitCode);
+    }
+
+    // 9. CLI de revocación: --revoke-all revoca todas las sesiones activas con código 0
+    [Fact]
+    public async Task Test09_Cli_RevokeAll_RevokesAllSessions_ReturnsExitCode0()
+    {
+        var repo = new TestIdentityRepository();
+        var (user, membership) = CreateUserAndMembership(repo);
+        var now = DateTimeOffset.UtcNow;
+
+        var tokenK1 = new RefreshToken(Guid.NewGuid(), user.Id, membership.OrganizationId, "hash-k1", now.AddDays(7), now, "k1");
+        var tokenK2 = new RefreshToken(Guid.NewGuid(), user.Id, membership.OrganizationId, "hash-k2", now.AddDays(7), now, "k2");
+        repo.RefreshTokens.Add(tokenK1);
+        repo.RefreshTokens.Add(tokenK2);
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IIdentityRepository>(repo);
+        services.AddSingleton<IOperationalSessionRevocationService, OperationalSessionRevocationService>();
+        services.AddLogging();
+        var sp = services.BuildServiceProvider();
+
+        var exitCode = await global::Program.RunRevocationCliAsync(sp, ["--revoke-all"]);
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(tokenK1.RevokedAtUtc);
+        Assert.NotNull(tokenK2.RevokedAtUtc);
+    }
+
+    // 10. CLI ejecutado como subproceso real del SO con dotnet: valida salida JSON y código de salida no cero
+    [Fact]
+    public async Task Test10_Cli_ExecutionViaDotnetProcess_WithoutKid_FailsWithExitCode1()
+    {
+        var apiDllPath = Path.Combine(AppContext.BaseDirectory, "MS.Cobroup.BackendAdmin.Api.dll");
+        if (!File.Exists(apiDllPath))
+        {
+            return;
+        }
+
+        var startInfo = new ProcessStartInfo("dotnet", $"\"{apiDllPath}\" --revoke-kid")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.Environment["JWT_REVOKE_KID"] = "";
+        startInfo.Environment["DOTNET_NOLOGO"] = "1";
+        startInfo.Environment["ConnectionStrings__IdentityDatabase"] = "Host=localhost;Database=cobroup_test;Username=test;Password=test";
+        startInfo.Environment["Identity__Issuer"] = Issuer;
+        startInfo.Environment["Identity__Audience"] = Audience;
+        startInfo.Environment["Jwt__SigningKeyBase64"] = Key1Base64;
+        startInfo.Environment["Jwt__ActiveKeyId"] = "k1";
+        startInfo.Environment["OperationalApi__BaseUrl"] = "http://localhost:8080";
+
+        using var process = Process.Start(startInfo);
+        Assert.NotNull(process);
+
+        var stderr = await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        Assert.Equal(1, process.ExitCode);
+        Assert.Contains("requiere un parámetro kid", stderr);
+        Assert.Contains("\"status\":\"ERROR\"", stderr);
     }
 
     private static (ApplicationUser User, OrganizationMembership Membership) CreateUserAndMembership(TestIdentityRepository repo)
