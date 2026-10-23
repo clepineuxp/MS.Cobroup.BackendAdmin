@@ -25,12 +25,6 @@ public sealed class AuthController(IAntiforgery antiforgery) : ControllerBase
         return Ok(new AntiforgeryResponse(tokens.RequestToken ?? string.Empty));
     }
 
-    [HttpGet(".well-known/jwks.json")]
-    [AllowAnonymous]
-    public IActionResult GetJwks([FromServices] IJwtSigningKeyProvider keyProvider)
-    {
-        return Ok(keyProvider.GetPublicJwks());
-    }
 
     [HttpPost("login")]
     [EnableRateLimiting("identity-write")]

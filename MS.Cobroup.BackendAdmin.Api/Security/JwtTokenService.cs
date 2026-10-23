@@ -11,7 +11,7 @@ namespace MS.Cobroup.BackendAdmin.Api.Security;
 
 public sealed class JwtTokenService(
     IConfiguration configuration,
-    IJwtSigningKeyProvider keyProvider,
+    ISymmetricKeyService keyService,
     IIdentityRepository identityRepository) : ITokenService
 {
     private const int AccessTokenLifetimeSeconds = 900; // 15 minutes
@@ -67,11 +67,11 @@ public sealed class JwtTokenService(
         JwtSecurityToken jwtToken;
         try
         {
-            var refreshValidationParams = keyProvider.CreateTokenValidationParameters(issuer, AudienceRefresh);
+            var refreshValidationParams = keyService.CreateTokenValidationParameters(issuer, AudienceRefresh);
 
             handler.ValidateToken(rawRefreshToken, refreshValidationParams, out var validatedToken);
             if (validatedToken is not JwtSecurityToken parsed ||
-                !parsed.Header.Alg.Equals(SecurityAlgorithms.RsaSha256, StringComparison.OrdinalIgnoreCase))
+                !parsed.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.OrdinalIgnoreCase))
             {
                 return new TokenRefreshResult(false, Error: "Algoritmo de token inválido.");
             }
@@ -180,11 +180,11 @@ public sealed class JwtTokenService(
         {
             var issuer = configuration["Identity:Issuer"]
                 ?? throw new InvalidOperationException("Identity:Issuer is required.");
-            var refreshValidationParams = keyProvider.CreateTokenValidationParameters(issuer, AudienceRefresh);
+            var refreshValidationParams = keyService.CreateTokenValidationParameters(issuer, AudienceRefresh);
 
             handler.ValidateToken(rawRefreshToken, refreshValidationParams, out var validatedToken);
             if (validatedToken is JwtSecurityToken jwtToken &&
-                string.Equals(jwtToken.Header.Alg, SecurityAlgorithms.RsaSha256, StringComparison.OrdinalIgnoreCase))
+                string.Equals(jwtToken.Header.Alg, SecurityAlgorithms.HmacSha256, StringComparison.OrdinalIgnoreCase))
             {
                 var typ = jwtToken.Claims.FirstOrDefault(c => c.Type == "typ")?.Value;
                 if (string.Equals(typ, "refresh", StringComparison.Ordinal))
@@ -226,13 +226,13 @@ public sealed class JwtTokenService(
         JwtSecurityToken jwtToken;
         try
         {
-            var refreshValidationParams = keyProvider.CreateTokenValidationParameters(issuer, AudienceRefresh);
+            var refreshValidationParams = keyService.CreateTokenValidationParameters(issuer, AudienceRefresh);
 
             handler.ValidateToken(rawRefreshToken, refreshValidationParams, out var validatedToken);
             if (validatedToken is not JwtSecurityToken parsed ||
-                !string.Equals(parsed.Header.Alg, SecurityAlgorithms.RsaSha256, StringComparison.OrdinalIgnoreCase))
+                !string.Equals(parsed.Header.Alg, SecurityAlgorithms.HmacSha256, StringComparison.OrdinalIgnoreCase))
             {
-                return new OrganizationSwitchResult(false, StatusCode: 401, Error: "El token de refresco no utiliza el algoritmo RS256 requerido.");
+                return new OrganizationSwitchResult(false, StatusCode: 401, Error: "El token de refresco no utiliza el algoritmo HS256 requerido.");
             }
             jwtToken = parsed;
         }
@@ -345,7 +345,7 @@ public sealed class JwtTokenService(
             Expires = now.UtcDateTime.AddSeconds(AccessTokenLifetimeSeconds),
             Issuer = issuer,
             Audience = AudienceAccess,
-            SigningCredentials = keyProvider.GetSigningCredentials()
+            SigningCredentials = keyService.GetSigningCredentials()
         };
 
         var handler = new JwtSecurityTokenHandler();
@@ -381,7 +381,7 @@ public sealed class JwtTokenService(
             Expires = now.UtcDateTime.AddDays(RefreshTokenLifetimeDays),
             Issuer = issuer,
             Audience = AudienceRefresh,
-            SigningCredentials = keyProvider.GetSigningCredentials()
+            SigningCredentials = keyService.GetSigningCredentials()
         };
 
         var handler = new JwtSecurityTokenHandler();

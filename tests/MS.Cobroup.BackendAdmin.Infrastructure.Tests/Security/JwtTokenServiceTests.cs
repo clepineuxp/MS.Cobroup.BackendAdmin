@@ -10,14 +10,18 @@ using MS.Cobroup.BackendAdmin.Api.Security;
 using MS.Cobroup.BackendAdmin.Domain.Authorization;
 using MS.Cobroup.BackendAdmin.Domain.Identity;
 using MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
+using Xunit;
 
 namespace MS.Cobroup.BackendAdmin.Infrastructure.Tests.Security;
 
 public sealed class JwtTokenServiceTests
 {
+    private static readonly byte[] KeyBytes = RandomNumberGenerator.GetBytes(32);
+    private static readonly string KeyBase64 = Convert.ToBase64String(KeyBytes);
+
     private readonly IConfiguration configuration;
     private readonly IHostEnvironment environment;
-    private readonly RsaKeyService rsaKeyService;
+    private readonly SymmetricKeyService keyService;
     private readonly TestIdentityRepository repository;
     private readonly JwtTokenService tokenService;
 
@@ -27,18 +31,19 @@ public sealed class JwtTokenServiceTests
         {
             ["Identity:Issuer"] = "https://identity.cobroup.internal",
             ["Identity:Audience"] = "cobroup-api",
-            ["Jwt:KeyId"] = "test-rsa-key-1"
+            ["Jwt:SigningKeyBase64"] = KeyBase64,
+            ["Jwt:ActiveKeyId"] = "test-key-1"
         };
 
         configuration = new ConfigurationBuilder().AddInMemoryCollection(inMemory).Build();
         environment = new TestHostEnvironment { EnvironmentName = Environments.Development };
-        rsaKeyService = new RsaKeyService(configuration, environment);
+        keyService = new SymmetricKeyService(configuration, environment);
         repository = new TestIdentityRepository();
-        tokenService = new JwtTokenService(configuration, rsaKeyService, repository);
+        tokenService = new JwtTokenService(configuration, keyService, repository);
     }
 
     [Fact]
-    public async Task IssueTokensAsync_EmitsValidRs256Tokens_WithMandatoryClaimsAnd15mExpiration()
+    public async Task IssueTokensAsync_EmitsValidHs256Tokens_WithMandatoryClaimsAnd15mExpiration()
     {
         var (user, membership) = CreateUserAndMembership();
 
@@ -48,13 +53,13 @@ public sealed class JwtTokenServiceTests
         Assert.NotNull(result.RawRefreshToken);
         Assert.Equal(900, result.ExpiresIn);
 
-        // Validate Access Token Claims and RS256 algorithm
+        // Validate Access Token Claims and HS256 algorithm
         var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
-        var principal = handler.ValidateToken(result.AccessToken, rsaKeyService.TokenValidationParameters, out var validatedToken);
+        var principal = handler.ValidateToken(result.AccessToken, keyService.TokenValidationParameters, out var validatedToken);
         var jwt = Assert.IsType<JwtSecurityToken>(validatedToken);
 
-        Assert.Equal(SecurityAlgorithms.RsaSha256, jwt.Header.Alg);
-        Assert.Equal("test-rsa-key-1", jwt.Header.Kid);
+        Assert.Equal(SecurityAlgorithms.HmacSha256, jwt.Header.Alg);
+        Assert.Equal("test-key-1", jwt.Header.Kid);
         Assert.Equal("access", jwt.Claims.First(c => c.Type == "typ").Value);
         Assert.Equal("https://identity.cobroup.internal", jwt.Claims.First(c => c.Type == JwtRegisteredClaimNames.Iss).Value);
         Assert.Equal("cobroup-api", jwt.Claims.First(c => c.Type == JwtRegisteredClaimNames.Aud).Value);
@@ -68,10 +73,11 @@ public sealed class JwtTokenServiceTests
         Assert.True(exp - iat <= 900);
 
         // Verify Refresh Token Claims
-        var refreshValidationParams = rsaKeyService.TokenValidationParameters.Clone();
+        var refreshValidationParams = keyService.TokenValidationParameters.Clone();
         refreshValidationParams.ValidAudience = "cobroup-refresh";
         handler.ValidateToken(result.RawRefreshToken, refreshValidationParams, out var validatedRefresh);
         var refreshJwt = Assert.IsType<JwtSecurityToken>(validatedRefresh);
+        Assert.Equal(SecurityAlgorithms.HmacSha256, refreshJwt.Header.Alg);
         Assert.Equal("refresh", refreshJwt.Claims.First(c => c.Type == "typ").Value);
         Assert.Equal("cobroup-refresh", refreshJwt.Claims.First(c => c.Type == JwtRegisteredClaimNames.Aud).Value);
         Assert.Equal(result.FamilyId.ToString(), refreshJwt.Claims.First(c => c.Type == "family_id").Value);
@@ -91,12 +97,13 @@ public sealed class JwtTokenServiceTests
         var handler = new JwtSecurityTokenHandler();
 
         // Token with wrong issuer
-        var wrongIssuerKeyService = new RsaKeyService(
+        var wrongIssuerKeyService = new SymmetricKeyService(
             new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Identity:Issuer"] = "https://attacker.com",
                 ["Identity:Audience"] = "cobroup-api",
-                ["Jwt:KeyId"] = "attacker-key"
+                ["Jwt:SigningKeyBase64"] = KeyBase64,
+                ["Jwt:ActiveKeyId"] = "attacker-key"
             }).Build(),
             environment);
 
@@ -113,11 +120,11 @@ public sealed class JwtTokenServiceTests
 
         // Validating with genuine params must reject wrong issuer
         Assert.ThrowsAny<SecurityTokenException>(() =>
-            handler.ValidateToken(attackerTokens.AccessToken, rsaKeyService.TokenValidationParameters, out _));
+            handler.ValidateToken(attackerTokens.AccessToken, keyService.TokenValidationParameters, out _));
 
         // Genuine token validated with wrong audience must reject
         var genuineTokens = await tokenService.IssueTokensAsync(user, membership, null, CancellationToken.None);
-        var wrongAudienceParams = rsaKeyService.TokenValidationParameters.Clone();
+        var wrongAudienceParams = keyService.TokenValidationParameters.Clone();
         wrongAudienceParams.ValidAudience = "different-api";
 
         Assert.Throws<SecurityTokenInvalidAudienceException>(() =>
@@ -182,52 +189,27 @@ public sealed class JwtTokenServiceTests
     {
         var prodEnv = new TestHostEnvironment { EnvironmentName = Environments.Production };
 
-        // Missing private key in production
+        // Missing signing key in production
         var incompleteConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Identity:Issuer"] = "https://identity.cobroup.internal",
             ["Identity:Audience"] = "cobroup-api"
         }).Build();
 
-        var ex = Assert.Throws<InvalidOperationException>(() => new RsaKeyService(incompleteConfig, prodEnv));
-        Assert.Contains("Jwt:PrivateKeyPem is required outside Development", ex.Message);
+        var ex = Assert.Throws<InvalidOperationException>(() => new SymmetricKeyService(incompleteConfig, prodEnv));
+        Assert.Contains("Jwt:SigningKeyBase64", ex.Message);
 
         // Insecure HTTP issuer in production
-        using var rsa = RSA.Create(2048);
-        var pem = rsa.ExportRSAPrivateKeyPem();
         var httpConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Identity:Issuer"] = "http://insecure.cobroup.internal",
             ["Identity:Audience"] = "cobroup-api",
-            ["Jwt:KeyId"] = "prod-kid-1",
-            ["Jwt:PrivateKeyPem"] = pem
+            ["Jwt:ActiveKeyId"] = "prod-kid-1",
+            ["Jwt:SigningKeyBase64"] = KeyBase64
         }).Build();
 
-        var httpEx = Assert.Throws<InvalidOperationException>(() => new RsaKeyService(httpConfig, prodEnv));
-        Assert.Contains("HTTPS URL", httpEx.Message);
-    }
-
-    [Fact]
-    public void JwksEndpoint_ExposesOnlyPublicParameters()
-    {
-        var jwks = rsaKeyService.GetPublicJwks();
-
-        Assert.NotNull(jwks);
-        var key = Assert.Single(jwks.Keys);
-        Assert.Equal("RSA", key.Kty);
-        Assert.Equal("sig", key.Use);
-        Assert.Equal(SecurityAlgorithms.RsaSha256, key.Alg);
-        Assert.Equal("test-rsa-key-1", key.Kid);
-        Assert.NotNull(key.N);
-        Assert.NotNull(key.E);
-
-        // Private parameters must never be exported!
-        Assert.Null(key.D);
-        Assert.Null(key.DP);
-        Assert.Null(key.DQ);
-        Assert.Null(key.QI);
-        Assert.Null(key.P);
-        Assert.Null(key.Q);
+        var httpEx = Assert.Throws<InvalidOperationException>(() => new SymmetricKeyService(httpConfig, prodEnv));
+        Assert.Contains("HTTPS", httpEx.Message);
     }
 
     [Fact]

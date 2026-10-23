@@ -14,78 +14,85 @@ public sealed class AccessJwtValidationTests
 {
     private const string ExpectedIssuer = "https://identity.cobroup.internal";
     private const string ExpectedAudience = "cobroup-api";
-    private const string KeyId = "admin-test-rsa-key-1";
+    private const string KeyId = "admin-test-key-1";
 
-    private readonly RSA signingRsa;
-    private readonly RsaSecurityKey signingKey;
+    private static readonly byte[] KeyBytes = RandomNumberGenerator.GetBytes(32);
+    private static readonly string KeyBase64 = Convert.ToBase64String(KeyBytes);
+
+    private readonly SymmetricSecurityKey signingKey;
     private readonly SigningCredentials signingCredentials;
-    private readonly RsaKeyService rsaKeyService;
+    private readonly SymmetricKeyService keyService;
     private readonly JwtSecurityTokenHandler tokenHandler;
 
     public AccessJwtValidationTests()
     {
-        signingRsa = RSA.Create(2048);
-        signingKey = new RsaSecurityKey(signingRsa) { KeyId = KeyId };
-        signingCredentials = new SigningCredentials(signingKey, SecurityAlgorithms.RsaSha256);
-
-        var privateKeyPem = signingRsa.ExportRSAPrivateKeyPem();
+        signingKey = new SymmetricSecurityKey(KeyBytes) { KeyId = KeyId };
+        signingCredentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
 
         var inMemory = new Dictionary<string, string?>
         {
             ["Identity:Issuer"] = ExpectedIssuer,
             ["Identity:Audience"] = ExpectedAudience,
-            ["Jwt:PrivateKeyPem"] = privateKeyPem,
-            ["Jwt:KeyId"] = KeyId
+            ["Jwt:SigningKeyBase64"] = KeyBase64,
+            ["Jwt:ActiveKeyId"] = KeyId
         };
 
         var config = new ConfigurationBuilder().AddInMemoryCollection(inMemory).Build();
         var env = new TestHostEnvironment { EnvironmentName = Environments.Development };
 
-        rsaKeyService = new RsaKeyService(config, env);
+        keyService = new SymmetricKeyService(config, env);
         tokenHandler = new JwtSecurityTokenHandler { MapInboundClaims = false };
     }
 
     [Fact]
     public void Case1_WrongSignature_FailsValidation()
     {
-        using var attackerRsa = RSA.Create(2048);
-        var attackerCredentials = new SigningCredentials(new RsaSecurityKey(attackerRsa) { KeyId = KeyId }, SecurityAlgorithms.RsaSha256);
+        var attackerKey = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(32)) { KeyId = KeyId };
+        var attackerCredentials = new SigningCredentials(attackerKey, SecurityAlgorithms.HmacSha256);
 
         var token = CreateToken(attackerCredentials);
 
         Assert.ThrowsAny<SecurityTokenException>(() =>
-            tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out _));
+            tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out _));
     }
 
     [Fact]
     public void Case2_WrongAlgorithmOrNone_FailsValidation()
     {
-        var hmacKey = new SymmetricSecurityKey("a-very-long-super-secret-key-32-chars-long!"u8.ToArray());
-        var hmacCreds = new SigningCredentials(hmacKey, SecurityAlgorithms.HmacSha256);
-        var tokenWithHmac = CreateToken(hmacCreds);
+        // Token firmado con RSA debe ser rechazado por la allowlist estricta de HS256
+        using var rsa = RSA.Create(2048);
+        var rsaCreds = new SigningCredentials(new RsaSecurityKey(rsa) { KeyId = KeyId }, SecurityAlgorithms.RsaSha256);
+        var tokenWithRsa = CreateToken(rsaCreds);
 
         Assert.ThrowsAny<SecurityTokenException>(() =>
-            tokenHandler.ValidateToken(tokenWithHmac, rsaKeyService.TokenValidationParameters, out _));
+            tokenHandler.ValidateToken(tokenWithRsa, keyService.TokenValidationParameters, out _));
+
+        // Token firmado con HMAC-SHA384 (con clave de 48 bytes requerida por HS384) debe ser rechazado por la allowlist de HS256
+        var hs384Key = new SymmetricSecurityKey(RandomNumberGenerator.GetBytes(48)) { KeyId = KeyId };
+        var hs384Creds = new SigningCredentials(hs384Key, SecurityAlgorithms.HmacSha384);
+        var tokenWithHs384 = CreateToken(hs384Creds);
+        Assert.ThrowsAny<SecurityTokenException>(() =>
+            tokenHandler.ValidateToken(tokenWithHs384, keyService.TokenValidationParameters, out _));
     }
 
     [Fact]
     public void Case3_MissingKid_FailsValidation()
     {
-        var credsNoKid = new SigningCredentials(new RsaSecurityKey(signingRsa) { KeyId = null }, SecurityAlgorithms.RsaSha256);
+        var credsNoKid = new SigningCredentials(new SymmetricSecurityKey(KeyBytes) { KeyId = null }, SecurityAlgorithms.HmacSha256);
         var token = CreateToken(credsNoKid);
 
         Assert.ThrowsAny<SecurityTokenException>(() =>
-            tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out _));
+            tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out _));
     }
 
     [Fact]
     public void Case4_UnknownKid_FailsValidation()
     {
-        var credsUnknownKid = new SigningCredentials(new RsaSecurityKey(signingRsa) { KeyId = "unknown-kid-999" }, SecurityAlgorithms.RsaSha256);
+        var credsUnknownKid = new SigningCredentials(new SymmetricSecurityKey(KeyBytes) { KeyId = "unknown-kid-999" }, SecurityAlgorithms.HmacSha256);
         var token = CreateToken(credsUnknownKid);
 
         Assert.ThrowsAny<SecurityTokenException>(() =>
-            tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out _));
+            tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out _));
     }
 
     [Fact]
@@ -94,7 +101,7 @@ public sealed class AccessJwtValidationTests
         var token = CreateToken(signingCredentials, issuer: "https://evil.issuer.com");
 
         Assert.Throws<SecurityTokenInvalidIssuerException>(() =>
-            tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out _));
+            tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out _));
     }
 
     [Fact]
@@ -103,7 +110,7 @@ public sealed class AccessJwtValidationTests
         var token = CreateToken(signingCredentials, audience: "wrong-audience");
 
         Assert.Throws<SecurityTokenInvalidAudienceException>(() =>
-            tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out _));
+            tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out _));
     }
 
     [Fact]
@@ -113,7 +120,7 @@ public sealed class AccessJwtValidationTests
         var token = CreateToken(signingCredentials, notBefore: now.AddMinutes(-5), expires: now);
 
         Assert.Throws<SecurityTokenExpiredException>(() =>
-            tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out _));
+            tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out _));
     }
 
     [Fact]
@@ -123,7 +130,7 @@ public sealed class AccessJwtValidationTests
         var token = CreateToken(signingCredentials, notBefore: future, expires: future.AddMinutes(15));
 
         Assert.Throws<SecurityTokenNotYetValidException>(() =>
-            tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out _));
+            tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out _));
     }
 
     [Theory]
@@ -140,7 +147,7 @@ public sealed class AccessJwtValidationTests
         }
 
         var token = CreateTokenWithClaims(signingCredentials, claims);
-        var principal = tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out var validatedToken);
+        var principal = tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out var validatedToken);
 
         var result = AccessJwtValidator.Validate(principal, validatedToken);
         Assert.False(result.IsValid);
@@ -155,7 +162,7 @@ public sealed class AccessJwtValidationTests
         claims.RemoveAll(c => c.Type == "sub");
         claims.Add(new Claim("sub", "not-a-guid"));
         var token = CreateTokenWithClaims(signingCredentials, claims);
-        var principal = tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out var validated);
+        var principal = tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out var validated);
         var res = AccessJwtValidator.Validate(principal, validated);
         Assert.False(res.IsValid);
         Assert.Contains("sub", res.FailureReason);
@@ -164,7 +171,7 @@ public sealed class AccessJwtValidationTests
         claims = CreateValidClaims();
         claims.RemoveAll(c => c.Type == "organization_id");
         token = CreateTokenWithClaims(signingCredentials, claims);
-        principal = tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out validated);
+        principal = tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out validated);
         res = AccessJwtValidator.Validate(principal, validated);
         Assert.False(res.IsValid);
         Assert.Contains("organization_id", res.FailureReason);
@@ -174,7 +181,7 @@ public sealed class AccessJwtValidationTests
         claims.RemoveAll(c => c.Type == "organization_code");
         claims.Add(new Claim("organization_code", ""));
         token = CreateTokenWithClaims(signingCredentials, claims);
-        principal = tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out validated);
+        principal = tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out validated);
         res = AccessJwtValidator.Validate(principal, validated);
         Assert.False(res.IsValid);
         Assert.Contains("organization_code", res.FailureReason);
@@ -183,7 +190,7 @@ public sealed class AccessJwtValidationTests
         claims = CreateValidClaims();
         claims.RemoveAll(c => c.Type == "jti");
         token = CreateTokenWithClaims(signingCredentials, claims);
-        principal = tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out validated);
+        principal = tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out validated);
         res = AccessJwtValidator.Validate(principal, validated);
         Assert.False(res.IsValid);
         Assert.Contains("jti", res.FailureReason);
@@ -193,7 +200,7 @@ public sealed class AccessJwtValidationTests
         claims.RemoveAll(c => c.Type == "role");
         claims.Add(new Claim("role", "SuperHacker"));
         token = CreateTokenWithClaims(signingCredentials, claims);
-        principal = tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out validated);
+        principal = tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out validated);
         res = AccessJwtValidator.Validate(principal, validated);
         Assert.False(res.IsValid);
         Assert.Contains("role", res.FailureReason);
@@ -224,10 +231,10 @@ public sealed class AccessJwtValidationTests
 
         // Audience mismatch alone will reject it
         Assert.Throws<SecurityTokenInvalidAudienceException>(() =>
-            tokenHandler.ValidateToken(rawToken, rsaKeyService.TokenValidationParameters, out _));
+            tokenHandler.ValidateToken(rawToken, keyService.TokenValidationParameters, out _));
 
         // And even if audience were coerced, typ=refresh is rejected by AccessJwtValidator
-        var paramsWithCoercedAud = rsaKeyService.TokenValidationParameters.Clone();
+        var paramsWithCoercedAud = keyService.TokenValidationParameters.Clone();
         paramsWithCoercedAud.ValidAudience = "cobroup-refresh";
         var principal = tokenHandler.ValidateToken(rawToken, paramsWithCoercedAud, out var validated);
         var result = AccessJwtValidator.Validate(principal, validated);
@@ -240,7 +247,7 @@ public sealed class AccessJwtValidationTests
     {
         var token = CreateToken(signingCredentials);
 
-        var principal = tokenHandler.ValidateToken(token, rsaKeyService.TokenValidationParameters, out var validatedToken);
+        var principal = tokenHandler.ValidateToken(token, keyService.TokenValidationParameters, out var validatedToken);
         var result = AccessJwtValidator.Validate(principal, validatedToken);
 
         Assert.True(result.IsValid);

@@ -17,7 +17,7 @@ public sealed class PostgresRefreshTokenConcurrencyTests
     public PostgresRefreshTokenConcurrencyTests()
     {
         var config = new ConfigurationBuilder()
-            .AddUserSecrets<Api.Security.RsaKeyService>(optional: true)
+            .AddUserSecrets<Api.Security.SymmetricKeyService>(optional: true)
             .AddEnvironmentVariables()
             .Build();
 

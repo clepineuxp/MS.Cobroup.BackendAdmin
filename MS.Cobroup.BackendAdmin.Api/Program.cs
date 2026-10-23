@@ -111,9 +111,8 @@ builder.Services.AddDbContext<IdentityDbContext>(options =>
         postgres.MigrationsAssembly(typeof(IdentityDbContext).Assembly.FullName));
 });
 
-var keyProvider = JwtSigningKeyProviderFactory.Create(builder.Configuration, builder.Environment);
-builder.Services.AddSingleton<IJwtSigningKeyProvider>(keyProvider);
-builder.Services.AddSingleton<IRsaKeyService>(sp => (IRsaKeyService)sp.GetRequiredService<IJwtSigningKeyProvider>());
+var keyService = new SymmetricKeyService(builder.Configuration, builder.Environment);
+builder.Services.AddSingleton<ISymmetricKeyService>(keyService);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -123,7 +122,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.SaveToken = true;
         var issuer = builder.Configuration["Identity:Issuer"] ?? "https://localhost:7119/";
         var audience = builder.Configuration["Identity:Audience"] ?? "cobroup-api";
-        options.TokenValidationParameters = keyProvider.CreateTokenValidationParameters(issuer, audience);
+        options.TokenValidationParameters = keyService.CreateTokenValidationParameters(issuer, audience);
         options.Events = new JwtBearerEvents
         {
             OnTokenValidated = context =>

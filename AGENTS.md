@@ -315,3 +315,31 @@
   - Actualizado `ADR-0006` (punto 4 de limitaciones operativas) y `README.md` de BackendAdmin.
   - Se formaliza la aceptación de la indisponibilidad breve durante el reinicio del pod en desarrollo.
 - **Git**: Cambios preservados en el working tree sobre rama `feature/solucion-hallazgos-iniciales`; sin commit, push, merge, tag ni PR.
+
+### 2026-10-22 / 2026-10-23 — Migración integral a JWT simétrico HS256 por ambiente (BackendAdmin)
+
+- **Decisión aplicada**: `cobroup.md/DECISION_AUTENTICACION_JWT.md`, `BACKLOG_SEGURIDAD_FIRMA_SIMETRICA.md` y `MS.Cobroup.BackendAdmin/docs/decisions/0007-symmetric-hs256-per-environment.md`.
+- **Componentes retirados**:
+  - Eliminados: `EphemeralRsaSigningKeyProvider.cs`, `IJwtSigningKeyProvider.cs`, `IRsaKeyService.cs`, `RsaKeyService.cs`, `JwtSigningKeyProviderFactory.cs` y `EphemeralRsaSigningKeyProviderTests.cs`.
+  - Eliminado el endpoint JWKS `GET /api/v1/auth/.well-known/jwks.json` de `AuthController.cs`.
+  - Eliminada configuración legacy: `Jwt:SigningProvider`, `Jwt:AllowEphemeralSigning` y flags de acknowledge.
+- **Implementación técnica**:
+  - `MS.Cobroup.BackendAdmin.Api/Security/ISymmetricKeyService.cs` y `SymmetricKeyService.cs`:
+    - Proveedor simétrico singleton con fail-fast estricto en startup: valida que `Jwt:SigningKeyBase64` esté presente, no vacío, sin placeholders, sea Base64 válido y decodifique a mínimo 32 bytes (256 bits).
+    - Exclusividad de algoritmo: `SecurityAlgorithms.HmacSha256` (`alg=HS256`).
+    - Emisión con `ActiveKeyId` configurado explícitamente (`k1`).
+    - Soporte de claves anteriores (`Jwt:PreviousValidationKeys`) exclusivamente para validación durante ventanas acotadas de rotación.
+  - `MS.Cobroup.BackendAdmin.Api/Security/JwtTokenService.cs`:
+    - Emisión de access y refresh tokens firmados exclusivamente con `HS256` y `kid`.
+    - Validación estricta de cookies de refresh con allowlist de algoritmos `HS256`.
+  - `MS.Cobroup.BackendAdmin.Api/Security/AccessJwtValidator.cs`:
+    - Validación estricta con `ValidAlgorithms = [SecurityAlgorithms.HmacSha256]`.
+  - `MS.Cobroup.BackendAdmin.Api/Program.cs`:
+    - Registro de `ISymmetricKeyService` como Singleton y configuración de `JwtBearerOptions` con parámetros simétricos.
+- **Pruebas automatizadas**:
+  - Creada suite `SymmetricKeyServiceTests.cs` (16 pruebas): fail-fast por clave ausente, vacía, placeholder, base64 inválido, 31 bytes; aceptación de 32 bytes; emisión con clave activa; validación de clave activa y anterior; rechazo por retiro de clave anterior; consistencia multirréplica; y rechazo de algoritmos `none`, RS256, ES256, HS384, HS512.
+  - Actualizadas `AccessJwtValidationTests.cs`, `JwtTokenServiceTests.cs`, `AuthLifecycleHttpTests.cs`, `PostgresRefreshTokenConcurrencyTests.cs`.
+  - Suite completa: 115/115 pruebas pasando en Release (Core 51/51, Infrastructure 64/64).
+  - Compilación Release: 0 warnings, 0 errors.
+  - EF Core: 0 cambios pendientes de modelo (`dotnet ef migrations has-pending-model-changes`).
+- **Git**: Cambios preservados en working tree sobre rama `feature/solucion-hallazgos-iniciales`; sin commit, push, merge, tag ni PR.

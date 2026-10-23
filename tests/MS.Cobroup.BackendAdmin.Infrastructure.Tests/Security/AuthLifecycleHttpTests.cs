@@ -25,11 +25,16 @@ public sealed class AuthLifecycleHttpTests : IClassFixture<WebApplicationFactory
     private readonly List<Guid> createdOrgIds = [];
     private readonly List<Guid> createdUserIds = [];
 
+    private static readonly string TestSigningKeyBase64 =
+        Convert.ToBase64String(Encoding.UTF8.GetBytes("test-secret-signing-key-32-bytes!"));
+
     public AuthLifecycleHttpTests(WebApplicationFactory<Program> factory)
     {
         this.factory = factory.WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Development");
+            builder.UseSetting("Jwt:SigningKeyBase64", TestSigningKeyBase64);
+            builder.UseSetting("Jwt:ActiveKeyId", "test-k1");
         });
     }
 
