@@ -117,4 +117,24 @@ internal sealed class TestIdentityRepository : IIdentityRepository
         }
         return Task.CompletedTask;
     }
+
+    public Task<int> RevokeRefreshTokensBySigningKeyIdAsync(string signingKeyId, DateTimeOffset revokedAtUtc, string reason, CancellationToken cancellationToken)
+    {
+        var active = RefreshTokens.Where(t => t.SigningKeyId == signingKeyId && t.IsActive).ToList();
+        foreach (var token in active)
+        {
+            token.Revoke(revokedAtUtc, reason: reason);
+        }
+        return Task.FromResult(active.Count);
+    }
+
+    public Task<int> RevokeAllRefreshTokensAsync(DateTimeOffset revokedAtUtc, string reason, CancellationToken cancellationToken)
+    {
+        var active = RefreshTokens.Where(t => t.IsActive).ToList();
+        foreach (var token in active)
+        {
+            token.Revoke(revokedAtUtc, reason: reason);
+        }
+        return Task.FromResult(active.Count);
+    }
 }

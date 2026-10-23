@@ -242,10 +242,12 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.ToTable("refresh_tokens");
             entity.HasKey(item => item.Id);
             entity.Property(item => item.TokenHash).HasMaxLength(64).IsRequired();
+            entity.Property(item => item.SigningKeyId).HasMaxLength(64).IsRequired();
             entity.Property(item => item.ReplacedByTokenHash).HasMaxLength(64);
             entity.Property(item => item.RevocationReason).HasMaxLength(256);
             entity.HasIndex(item => item.TokenHash).IsUnique();
             entity.HasIndex(item => item.FamilyId);
+            entity.HasIndex(item => item.SigningKeyId);
             entity.HasIndex(item => new { item.UserId, item.ExpiresAtUtc });
             entity.HasOne<ApplicationUser>()
                 .WithMany()

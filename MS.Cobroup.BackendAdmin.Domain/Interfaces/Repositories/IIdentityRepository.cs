@@ -70,5 +70,16 @@ public interface IIdentityRepository
         Guid userId,
         DateTimeOffset revokedAtUtc,
         CancellationToken cancellationToken);
+
+    Task<int> RevokeRefreshTokensBySigningKeyIdAsync(
+        string signingKeyId,
+        DateTimeOffset revokedAtUtc,
+        string reason,
+        CancellationToken cancellationToken);
+
+    Task<int> RevokeAllRefreshTokensAsync(
+        DateTimeOffset revokedAtUtc,
+        string reason,
+        CancellationToken cancellationToken);
 }
 

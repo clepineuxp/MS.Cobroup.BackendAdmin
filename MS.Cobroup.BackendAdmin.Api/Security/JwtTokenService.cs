@@ -39,7 +39,8 @@ public sealed class JwtTokenService(
             membership.OrganizationId,
             refreshTokenHash,
             now.AddDays(RefreshTokenLifetimeDays),
-            now);
+            now,
+            keyService.ActiveKeyId);
 
         await identityRepository.SaveRefreshTokenAsync(refreshToken, cancellationToken);
 
@@ -130,7 +131,8 @@ public sealed class JwtTokenService(
             organizationId,
             newRefreshTokenHash,
             now.AddDays(RefreshTokenLifetimeDays),
-            now);
+            now,
+            keyService.ActiveKeyId);
 
         // Atomic rotation in PostgreSQL
         var rotated = await identityRepository.RotateRefreshTokenAtomicAsync(
@@ -278,7 +280,8 @@ public sealed class JwtTokenService(
             targetMembership.OrganizationId,
             newRefreshTokenHash,
             now.AddDays(RefreshTokenLifetimeDays),
-            now);
+            now,
+            keyService.ActiveKeyId);
 
         // 6. Atomic PostgreSQL transaction: verify active token hash, revoke previous family, and persist new initial token
         var currentTokenHash = HashToken(rawRefreshToken);

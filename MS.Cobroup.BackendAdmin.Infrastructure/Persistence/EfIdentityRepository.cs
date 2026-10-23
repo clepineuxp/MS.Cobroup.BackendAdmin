@@ -325,4 +325,49 @@ public sealed class EfIdentityRepository(IdentityDbContext dbContext) : IIdentit
             await dbContext.SaveChangesAsync(cancellationToken);
         }
     }
+
+    public async Task<int> RevokeRefreshTokensBySigningKeyIdAsync(
+        string signingKeyId,
+        DateTimeOffset revokedAtUtc,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var activeTokens = await dbContext.RefreshTokens
+            .Where(item => item.SigningKeyId == signingKeyId && item.RevokedAtUtc == null && item.ExpiresAtUtc > DateTimeOffset.UtcNow)
+            .ToListAsync(cancellationToken);
+
+        foreach (var token in activeTokens)
+        {
+            token.Revoke(revokedAtUtc, reason: reason);
+        }
+
+        if (activeTokens.Count > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return activeTokens.Count;
+    }
+
+    public async Task<int> RevokeAllRefreshTokensAsync(
+        DateTimeOffset revokedAtUtc,
+        string reason,
+        CancellationToken cancellationToken)
+    {
+        var activeTokens = await dbContext.RefreshTokens
+            .Where(item => item.RevokedAtUtc == null && item.ExpiresAtUtc > DateTimeOffset.UtcNow)
+            .ToListAsync(cancellationToken);
+
+        foreach (var token in activeTokens)
+        {
+            token.Revoke(revokedAtUtc, reason: reason);
+        }
+
+        if (activeTokens.Count > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return activeTokens.Count;
+    }
 }

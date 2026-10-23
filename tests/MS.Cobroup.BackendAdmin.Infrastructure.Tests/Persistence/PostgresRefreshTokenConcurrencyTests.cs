@@ -71,7 +71,8 @@ public sealed class PostgresRefreshTokenConcurrencyTests
             org.Id,
             initialTokenHash,
             now.AddDays(30),
-            now);
+            now,
+            "k-test");
 
         setupContext.RefreshTokens.Add(initialToken);
         await setupContext.SaveChangesAsync();
@@ -83,11 +84,11 @@ public sealed class PostgresRefreshTokenConcurrencyTests
 
             var newRawToken1 = $"new-token-1-{Guid.NewGuid():N}";
             var newTokenHash1 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(newRawToken1)));
-            var newToken1 = new RefreshToken(familyId, user.Id, org.Id, newTokenHash1, now.AddDays(30), now);
+            var newToken1 = new RefreshToken(familyId, user.Id, org.Id, newTokenHash1, now.AddDays(30), now, "k-test");
 
             var newRawToken2 = $"new-token-2-{Guid.NewGuid():N}";
             var newTokenHash2 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(newRawToken2)));
-            var newToken2 = new RefreshToken(familyId, user.Id, org.Id, newTokenHash2, now.AddDays(30), now);
+            var newToken2 = new RefreshToken(familyId, user.Id, org.Id, newTokenHash2, now.AddDays(30), now, "k-test");
 
             var task1 = Task.Run(async () =>
             {
@@ -187,7 +188,8 @@ public sealed class PostgresRefreshTokenConcurrencyTests
             org1.Id,
             initialTokenHash,
             now.AddDays(30),
-            now);
+            now,
+            "k-test");
 
         setupContext.RefreshTokens.Add(initialToken);
         await setupContext.SaveChangesAsync();
@@ -200,10 +202,10 @@ public sealed class PostgresRefreshTokenConcurrencyTests
             using var barrier = new Barrier(2);
 
             var newTokenHash1 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"tok1-{Guid.NewGuid():N}")));
-            var newToken1 = new RefreshToken(newFamily1, user.Id, org2.Id, newTokenHash1, now.AddDays(30), now);
+            var newToken1 = new RefreshToken(newFamily1, user.Id, org2.Id, newTokenHash1, now.AddDays(30), now, "k-test");
 
             var newTokenHash2 = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes($"tok2-{Guid.NewGuid():N}")));
-            var newToken2 = new RefreshToken(newFamily2, user.Id, org2.Id, newTokenHash2, now.AddDays(30), now);
+            var newToken2 = new RefreshToken(newFamily2, user.Id, org2.Id, newTokenHash2, now.AddDays(30), now, "k-test");
 
             var task1 = Task.Run(async () =>
             {

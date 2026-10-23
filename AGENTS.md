@@ -20,11 +20,12 @@
 
 ## Decisión vigente de autenticación
 
-- `MS.Cobroup.BackendAdmin` es la única autoridad para login, emisión, refresh, revocación y publicación JWKS bajo `../cobroup.md/DECISION_AUTENTICACION_JWT.md`.
-- Se usarán exclusivamente access y refresh tokens JWT con firma asimétrica `RS256` o `ES256`; no se mantendrá un mecanismo de identidad paralelo.
-- La clave privada es externa, exclusiva de este servicio, rotada por `kid` y obligatoria fuera de Development. No hay secretos/defaults de respaldo.
+- `MS.Cobroup.BackendAdmin` es la única autoridad de identidad para login, emisión, refresh y revocación bajo `../cobroup.md/DECISION_AUTENTICACION_JWT.md`.
+- Se usan exclusivamente access y refresh tokens JWT con firma simétrica `HS256`, con secreto independiente por ambiente (`dev`, `qa`, `prod`). No se utilizan OIDC, OpenIddict, JWKS, RSA, PEM/PFX ni algoritmos asimétricos.
+- `BackendAdmin` es el único emisor lógico JWT. El secreto simétrico se provee vía variables de entorno / Kubernetes Secret `jwt-signing-secret` (`Jwt__SigningKeyBase64`, `Jwt__ActiveKeyId`, y opcionalmente `Jwt__PreviousValidationKeys__0__KeyId`, `Jwt__PreviousValidationKeys__0__SigningKeyBase64` durante ventanas de rotación).
+- La clave activa debe decodificar a mínimo 32 bytes CSPRNG y poseer `kid` explícito sin defaults en runtime (cumpliendo `^[A-Za-z0-9._-]{1,64}$`).
 - Access JWT: máximo 15 minutos, audience `cobroup-api`, validación estricta y entrega al frontend solo para memoria.
-- Refresh JWT: máximo 30 días, audience `cobroup-refresh`, cookie HttpOnly/Secure/SameSite, hash server-side, uso único, rotación atómica, familia y detección de replay.
+- Refresh JWT: máximo 30 días, audience `cobroup-refresh`, cookie HttpOnly/Secure/SameSite, hash server-side, `SigningKeyId` persistido en la entidad `RefreshToken`, uso único, rotación atómica, familia, detección de replay y revocación atómica por `SigningKeyId` al retirar claves en rotación.
 - El cambio de organización revoca la familia anterior antes de emitir tokens del nuevo tenant.
 - Las referencias de identidad anteriores dentro del historial append-only son evidencia histórica y están supersedidas; no son planeación ni criterio de aceptación vigente.
 
@@ -342,4 +343,40 @@
   - Suite completa: 115/115 pruebas pasando en Release (Core 51/51, Infrastructure 64/64).
   - Compilación Release: 0 warnings, 0 errors.
   - EF Core: 0 cambios pendientes de modelo (`dotnet ef migrations has-pending-model-changes`).
+- **Git**: Cambios preservados en working tree sobre rama `feature/solucion-hallazgos-iniciales`; sin commit, push, merge, tag ni PR.
+
+### 2026-10-23 — Remediación v9: Contrato único de rotación, persistencia de SigningKeyId y revocación atómica
+
+- **Auditoría atendida**: `cobroup.md/informe/auditoria-backend-csharp-2026-10-23-v9.html`.
+- **Contrato único de configuración**:
+  - `Jwt__ActiveKeyId`, `Jwt__SigningKeyBase64`, `Jwt__PreviousValidationKeys__0__KeyId`, `Jwt__PreviousValidationKeys__0__SigningKeyBase64`.
+  - Fail-fast estricto en `SymmetricKeyService`: validación de formato `kid` con regex `^[A-Za-z0-9._-]{1,64}$`, rechazo de defaults en runtime (`k1`), verificación estricta de pares en previous keys (ambos presentes o ambos ausentes), rechazo de hijos incompletos (sin `continue` silencioso), verificación de propiedades desconocidas y rechazo de coincidencia de material o `kid` entre activo y previo.
+- **Entidad y persistencia de RefreshToken**:
+  - Añadido `SigningKeyId` (varchar(64), obligatorio) a `RefreshToken` para asociar atómicamente cada sesión/familia a la clave que emitió su credencial.
+  - `JwtTokenService` propaga `ActiveKeyId` al crear y rotar refresh tokens.
+  - Implementado `RevokeRefreshTokensBySigningKeyIdAsync` en `IIdentityRepository` y `EfIdentityRepository` para revocación atómica durante la etapa de retiro de clave (Etapa 3 del runbook).
+  - Migración EF Core `20261023151001_AddSigningKeyIdToRefreshTokens` aplicada a la base de datos de pruebas.
+- **Limpieza de configuración huérfana**:
+  - Eliminados bloques huérfanos `Identity:Clients` y `SeedClientsOnStartup` en `appsettings.json` y `appsettings.Development.json`.
+- **Pruebas y verificación**:
+  - Suite completa: 129/129 pruebas pasando (Core 51/51, Infrastructure 78/78).
+  - Cero cambios pendientes de modelo en EF Core (`has-pending-model-changes`).
+- **Git**: Cambios preservados en working tree sobre rama `feature/solucion-hallazgos-iniciales`; sin commit, push, merge, tag ni PR.
+### 2026-10-23 — Remediación obligatoria de hallazgo B-21: Rotación HS256, eliminación de defaults y CLI de revocación
+
+- **Auditoría atendida**: `cobroup.md/informe/auditoria-backend-csharp-2026-10-23-v10.html` (Hallazgo B-21).
+- **Eliminación total de defaults `k1`**:
+  - `MS.Cobroup.BackendAdmin.Domain/Identity/RefreshToken.cs`: Eliminado valor por defecto `"k1"` de la propiedad y del parámetro de constructor; exige `signingKeyId` obligatorio y válido cumpliendo `^[A-Za-z0-9._-]{1,64}$`.
+  - `MS.Cobroup.BackendAdmin.Infrastructure/Persistence/IdentityDbContext.cs`: Eliminado `.HasDefaultValue("k1")` sobre la columna `SigningKeyId`.
+  - Migración EF Core `20261023151001_AddSigningKeyIdToRefreshTokens`: Actualizada con purga segura y limpia de refresh tokens heredados sin clave (`DELETE FROM refresh_tokens;`).
+  - Eliminado `"ActiveKeyId": "k1"` de `MS.Cobroup.BackendAdmin.Api/appsettings.json` y `appsettings.Development.json`. Fail-fast en arranque si `Jwt:ActiveKeyId` falta o no cumple regex, incluso en entorno Development.
+- **Revocación operacional para Kubernetes Job**:
+  - `IIdentityRepository` y `EfIdentityRepository`: Implementado `RevokeAllRefreshTokensAsync` para soporte de revocación total en contingencia/emergencia.
+  - `IOperationalSessionRevocationService` e implementación en `MS.Cobroup.BackendAdmin.Core/Security/OperationalSessionRevocationService.cs`: Orquestación de revocación por `kid` y revocación total.
+  - `MS.Cobroup.BackendAdmin.Api/Program.cs`: Modo de comando CLI `--revoke-kid <kid>` y `--revoke-all`. Valida argumentos, ejecuta vía DI sobre PostgreSQL real, retorna JSON estructurado a stdout con conteo y timestamp no sensible, y finaliza con código de salida 0 (éxito) o 1 (error), sin exponer endpoints HTTP ni contraseñas.
+  - Añadido `IdentityDbContextFactory` para soporte de EF Core tools en tiempo de diseño.
+- **Pruebas automatizadas**:
+  - Implementada suite `B21MandatoryRotationTests.cs` (13 pruebas) en `MS.Cobroup.BackendAdmin.Infrastructure.Tests/Security/`: startup fail-fast por falta de `ActiveKeyId`, validación de constructor `RefreshToken`, regex de `kid`, atómica de switch de organización, persistencia de `SigningKeyId` nuevo al rotar, y simulación de revocación por CLI.
+  - Suite completa: 142/142 pruebas en verde (Core 51/51, Infrastructure 91/91).
+  - Cero cambios pendientes de modelo en EF Core (`has-pending-model-changes`).
 - **Git**: Cambios preservados en working tree sobre rama `feature/solucion-hallazgos-iniciales`; sin commit, push, merge, tag ni PR.

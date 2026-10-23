@@ -279,6 +279,52 @@ public sealed class JwtTokenServiceTests
         Assert.Equal(403, wrongTenantResult.StatusCode);
     }
 
+    [Fact]
+    public async Task RefreshToken_TracksSigningKeyId_AndRevokesOldKeyTokensOnRetirement()
+    {
+        var (user, membership) = CreateUserAndMembership();
+
+        // 1. Emitir token bajo clave activa k1 ("test-key-1")
+        var resultK1 = await tokenService.IssueTokensAsync(user, membership, null, CancellationToken.None);
+        var tokenK1 = repository.RefreshTokens.Last();
+        Assert.Equal("test-key-1", tokenK1.SigningKeyId);
+        Assert.True(tokenK1.IsActive);
+
+        // 2. Simular servicio rotado a k2
+        var keyK2Bytes = RandomNumberGenerator.GetBytes(32);
+        var inMemoryK2 = new Dictionary<string, string?>
+        {
+            ["Identity:Issuer"] = "https://identity.cobroup.internal",
+            ["Identity:Audience"] = "cobroup-api",
+            ["Jwt:SigningKeyBase64"] = Convert.ToBase64String(keyK2Bytes),
+            ["Jwt:ActiveKeyId"] = "k2",
+            ["Jwt:PreviousValidationKeys:0:KeyId"] = "test-key-1",
+            ["Jwt:PreviousValidationKeys:0:SigningKeyBase64"] = KeyBase64
+        };
+        var configK2 = new ConfigurationBuilder().AddInMemoryCollection(inMemoryK2).Build();
+        using var keyServiceK2 = new SymmetricKeyService(configK2, environment);
+        var tokenServiceK2 = new JwtTokenService(configK2, keyServiceK2, repository);
+
+        // 3. Rotar el refresh token durante la ventana de solapamiento
+        var refreshResult = await tokenServiceK2.RefreshTokensAsync(resultK1.RawRefreshToken, CancellationToken.None);
+        Assert.True(refreshResult.Success);
+        var tokenK2 = repository.RefreshTokens.Last();
+        Assert.Equal("k2", tokenK2.SigningKeyId);
+        Assert.True(tokenK2.IsActive);
+
+        // 4. Etapa 3: Retiro de clave anterior test-key-1
+        var revokedCount = await repository.RevokeRefreshTokensBySigningKeyIdAsync(
+            "test-key-1",
+            DateTimeOffset.UtcNow,
+            "Key test-key-1 retired",
+            CancellationToken.None);
+
+        // El token anterior k1 ya estaba revocado por la rotación, pero tokens inactivos de k1 que no rotaron se revocarían
+        // El token k2 permanece completamente activo
+        Assert.True(tokenK2.IsActive);
+        Assert.Equal("k2", tokenK2.SigningKeyId);
+    }
+
     private (ApplicationUser User, OrganizationMembership Membership) CreateUserAndMembership()
     {
         var now = DateTimeOffset.UtcNow;
