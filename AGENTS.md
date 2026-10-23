@@ -390,3 +390,14 @@
   - Añadida prueba arquitectónica que inspecciona todos los `.csproj` y falla si cualquier `ProjectReference` resuelve fuera de la raíz de `MS.Cobroup.BackendAdmin`.
 - **Verificación**: solución restaurada y compilada en Release con 0 warnings/errores; 148/148 pruebas aprobadas (Core 51/51, Infrastructure 97/97).
 - **Git**: Cambios preservados en working tree; sin commit, push, merge, tag ni PR.
+
+### 2026-10-23 — PostgreSQL efímero para pruebas de integración en GitHub Actions
+
+- **Problema corregido**: el job `Run Automated Tests` no aprovisionaba PostgreSQL ni definía `ConnectionStrings__IdentityDatabase`; por ello fallaban exactamente las 8 pruebas HTTP de ciclo de autenticación y las 2 pruebas de concurrencia PostgreSQL, aunque las 87 pruebas sin dependencia de base de datos aprobaban.
+- **Implementación**:
+  - Añadido un service container `postgres:18-alpine` aislado al job de pruebas, con health check y credenciales exclusivas no productivas.
+  - Añadida la variable de conexión del job y un paso previo que restaura `dotnet-ef` desde el manifiesto versionado y aplica todas las migraciones sobre la base efímera.
+  - Corregido `IdentityDbContextFactory` para consumir el contrato real `ConnectionStrings__IdentityDatabase`, eliminando el nombre divergente `IdentityConnection`.
+- **Seguridad**: la contraseña visible en el workflow pertenece únicamente al contenedor efímero del runner y no corresponde a ningún ambiente desplegado; no requiere un GitHub Secret.
+- **Verificación local**: restauración de `dotnet-ef` 10.0.11 correcta; la factoría de diseño resolvió `ConnectionStrings__IdentityDatabase`; compilación Release con 0 warnings/errores y suite completa en verde (Core 51/51, Infrastructure 97/97; total 148/148).
+- **Git**: Cambios preservados en working tree; sin commit, push, merge, tag ni PR.
