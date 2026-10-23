@@ -380,3 +380,13 @@
   - Suite completa: 142/142 pruebas en verde (Core 51/51, Infrastructure 91/91).
   - Cero cambios pendientes de modelo en EF Core (`has-pending-model-changes`).
 - **Git**: Cambios preservados en working tree sobre rama `feature/solucion-hallazgos-iniciales`; sin commit, push, merge, tag ni PR.
+
+### 2026-10-23 — Desacoplamiento total de pruebas entre BackendAdmin y Backend
+
+- **Problema corregido**: `MS.Cobroup.BackendAdmin.Infrastructure.Tests.csproj` referenciaba directamente `../MS.Cobroup.Backend/MS.Cobroup.Backend.Api.csproj`; funcionaba únicamente cuando ambos repositorios estaban presentes como carpetas hermanas y fallaba en GitHub Actions, donde cada repositorio se descarga de forma independiente.
+- **Implementación**:
+  - Eliminado el `ProjectReference` externo y el alias `BackendApi`.
+  - `B21MandatoryRotationTests` valida ahora exclusivamente el contrato de emisión, solapamiento, rotación y retiro propiedad de BackendAdmin mediante `SymmetricKeyService` y `JwtTokenService` locales.
+  - Añadida prueba arquitectónica que inspecciona todos los `.csproj` y falla si cualquier `ProjectReference` resuelve fuera de la raíz de `MS.Cobroup.BackendAdmin`.
+- **Verificación**: solución restaurada y compilada en Release con 0 warnings/errores; 148/148 pruebas aprobadas (Core 51/51, Infrastructure 97/97).
+- **Git**: Cambios preservados en working tree; sin commit, push, merge, tag ni PR.

@@ -1,4 +1,3 @@
-extern alias BackendApi;
 using System.Diagnostics;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -16,7 +15,6 @@ using MS.Cobroup.BackendAdmin.Domain.Authorization;
 using MS.Cobroup.BackendAdmin.Domain.Identity;
 using MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
 using MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
-using BackendSymmetricValidationService = BackendApi::MS.Cobroup.Backend.Api.Security.SymmetricTokenValidationService;
 using Xunit;
 
 namespace MS.Cobroup.BackendAdmin.Infrastructure.Tests.Security;
@@ -151,7 +149,7 @@ public sealed class B21MandatoryRotationTests
         Assert.True(t3_k2.IsActive);
         Assert.True(t4_k2.IsActive);
 
-        // Idempotencia: segunda invocación para k1 revoca 0 sin error
+        // Idempotencia: segunda invocación para k1 revoca 0 sin erro
         var res2 = await service.RevokeBySigningKeyIdAsync("k1", "Key rotation retirement", CancellationToken.None);
         Assert.Equal(0, res2.AffectedCount);
     }
@@ -179,9 +177,9 @@ public sealed class B21MandatoryRotationTests
         Assert.False(t2.IsActive);
     }
 
-    // 6. Token real emitido por BackendAdmin con k1 y k2 aceptado durante solapamiento; k1 rechazado tras retiro
+    // 6. BackendAdmin valida su contrato de emisión durante solapamiento y retiro sin depender de otro servicio.
     [Fact]
-    public async Task Test06_RealTokenInteroperability_OverlapAndRetirement()
+    public async Task Test06_IssuerRotationContract_OverlapAndRetirement()
     {
         var env = new TestHostEnvironment();
         var repo = new TestIdentityRepository();
@@ -220,44 +218,53 @@ public sealed class B21MandatoryRotationTests
         var tokenResultK2 = await tokenServiceK2.IssueTokensAsync(user, membership, null, CancellationToken.None);
         var jwtK2 = tokenResultK2.AccessToken;
 
-        // Backend validador configurado con k2 activa y k1 en clave anterior
-        using var backendValidatorOverlap = new BackendSymmetricValidationService(validatorConfigOverlap, env);
-        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
-
-        // Comprobacion de solapamiento usando el servicio real de Backend:
-        // Acepta token k1 emitido antes de la rotacion y token k2 emitido despues de la rotacion
-        var principalK1 = handler.ValidateToken(jwtK1, backendValidatorOverlap.TokenValidationParameters, out var validatedTokenK1);
-        Assert.NotNull(principalK1);
-        Assert.Equal("k1", ((JwtSecurityToken)validatedTokenK1).Header.Kid);
-
-        var principalK2 = handler.ValidateToken(jwtK2, backendValidatorOverlap.TokenValidationParameters, out var validatedTokenK2);
-        Assert.NotNull(principalK2);
-        Assert.Equal("k2", ((JwtSecurityToken)validatedTokenK2).Header.Kid);
-
-        // Rotacion de refresh token k1 genera nuevo refresh con SigningKeyId = "k2"
-        var refreshRotation = await tokenServiceK2.RefreshTokensAsync(tokenResultK1.RawRefreshToken, CancellationToken.None);
-        Assert.True(refreshRotation.Success);
-        var latestRefreshToken = repo.RefreshTokens.Last();
-        Assert.Equal("k2", latestRefreshToken.SigningKeyId);
-
-        // --- Etapa 3: Retiro de k1 (solo k2 en validador de Backend) ---
-        var validatorConfigRetired = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["Identity:Issuer"] = Issuer,
-            ["Identity:Audience"] = Audience,
-            ["Jwt:SigningKeyBase64"] = Key2Base64,
-            ["Jwt:ActiveKeyId"] = "k2"
-            // k1 retirado del slot
-        }).Build();
-
-        using var backendValidatorRetired = new BackendSymmetricValidationService(validatorConfigRetired, env);
-
-        // Token k1 emitido antes de la rotacion debe ser RECHAZADO por Backend
-        Assert.ThrowsAny<SecurityTokenException>(() =>
-            handler.ValidateToken(jwtK1, backendValidatorRetired.TokenValidationParameters, out _));
-
-        // Token k2 emitido con la nueva clave debe ser ACEPTADO por Backend
-        var principalK2AfterRetire = handler.ValidateToken(jwtK2, backendValidatorRetired.TokenValidationParameters, out _);
+        // Validación local del contrato criptográfico publicado por BackendAdmin.
+        // La aceptación operativa de este contrato se prueba autónomamente en MS.Cobroup.Backend.
+
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
+
+        // Comprobación de solapamiento con las claves administradas por el emisor:
+
+        // Acepta token k1 emitido antes de la rotacion y token k2 emitido despues de la rotacion
+        var principalK1 = handler.ValidateToken(jwtK1, keyServiceOverlap.TokenValidationParameters, out var validatedTokenK1);
+
+        Assert.NotNull(principalK1);
+        Assert.Equal("k1", ((JwtSecurityToken)validatedTokenK1).Header.Kid);
+
+        var principalK2 = handler.ValidateToken(jwtK2, keyServiceOverlap.TokenValidationParameters, out var validatedTokenK2);
+
+        Assert.NotNull(principalK2);
+        Assert.Equal("k2", ((JwtSecurityToken)validatedTokenK2).Header.Kid);
+
+        // Rotacion de refresh token k1 genera nuevo refresh con SigningKeyId = "k2"
+        var refreshRotation = await tokenServiceK2.RefreshTokensAsync(tokenResultK1.RawRefreshToken, CancellationToken.None);
+        Assert.True(refreshRotation.Success);
+        var latestRefreshToken = repo.RefreshTokens.Last();
+        Assert.Equal("k2", latestRefreshToken.SigningKeyId);
+
+        // --- Etapa 3: Retiro de k1 (solo k2 en validador de Backend) ---
+        var validatorConfigRetired = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Identity:Issuer"] = Issuer,
+            ["Identity:Audience"] = Audience,
+            ["Jwt:SigningKeyBase64"] = Key2Base64,
+            ["Jwt:ActiveKeyId"] = "k2"
+            // k1 retirado del slot
+        }).Build();
+
+        using var keyServiceRetired = new SymmetricKeyService(validatorConfigRetired, env);
+
+
+        // Token k1 emitido antes de la rotación debe ser rechazado por el contrato retirado.
+
+        Assert.ThrowsAny<SecurityTokenException>(() =>
+            handler.ValidateToken(jwtK1, keyServiceRetired.TokenValidationParameters, out _));
+
+
+        // Token k2 emitido con la nueva clave debe continuar siendo aceptado.
+
+        var principalK2AfterRetire = handler.ValidateToken(jwtK2, keyServiceRetired.TokenValidationParameters, out _);
+
         Assert.NotNull(principalK2AfterRetire);
     }
 
