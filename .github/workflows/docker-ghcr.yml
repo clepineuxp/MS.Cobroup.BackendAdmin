@@ -19,6 +19,22 @@ jobs:
   test:
     name: Run Automated Tests
     runs-on: ubuntu-latest
+    env:
+      ConnectionStrings__IdentityDatabase: Host=localhost;Port=5432;Database=cobroup_backendadmin_test;Username=cobroup_test;Password=cobroup_test_password
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: cobroup_backendadmin_test
+          POSTGRES_USER: cobroup_test
+          POSTGRES_PASSWORD: cobroup_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cobroup_test -d cobroup_backendadmin_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: 1. Checkout Code
         uses: actions/checkout@v4
@@ -34,7 +50,19 @@ jobs:
       - name: 4. Build Solution
         run: dotnet build MS.Cobroup.BackendAdmin.slnx -c Release --no-restore
 
-      - name: 5. Execute Tests
+      - name: 5. Restore EF Core Tool
+        run: dotnet tool restore
+
+      - name: 6. Apply Test Database Migrations
+        run: >-
+          dotnet ef database update
+          --project MS.Cobroup.BackendAdmin.Infrastructure
+          --startup-project MS.Cobroup.BackendAdmin.Api
+          --context IdentityDbContext
+          --configuration Release
+          --no-build
+
+      - name: 7. Execute Tests
         run: dotnet test MS.Cobroup.BackendAdmin.slnx -c Release --no-build --verbosity normal
 
   build-and-push:
