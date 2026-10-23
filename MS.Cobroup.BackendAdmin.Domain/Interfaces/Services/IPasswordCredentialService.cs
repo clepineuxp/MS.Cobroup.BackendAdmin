@@ -1,6 +1,6 @@
 using MS.Cobroup.BackendAdmin.Domain.Identity;
 
-namespace MS.Cobroup.BackendAdmin.Core.Identity;
+namespace MS.Cobroup.BackendAdmin.Domain.Interfaces.Services;
 
 public interface IPasswordCredentialService
 {

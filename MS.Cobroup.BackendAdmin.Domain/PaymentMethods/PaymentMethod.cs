@@ -24,12 +24,15 @@ public sealed class PaymentMethod
         if (trimmedName.Length > 50)
             throw new ArgumentException("El nombre del medio de pago no puede superar 50 caracteres.", nameof(name));
 
+        if (displayOrder < 1 || displayOrder > 999)
+            throw new ArgumentOutOfRangeException(nameof(displayOrder), "El orden de visualización debe estar entre 1 y 999.");
+
         return new PaymentMethod
         {
             Id = Guid.NewGuid(),
             OrganizationId = organizationId,
             Name = trimmedName,
-            NormalizedName = trimmedName.ToUpperInvariant(),
+            NormalizedName = Normalize(trimmedName),
             DisplayOrder = displayOrder,
             IsActive = true,
             CreatedAtUtc = nowUtc,
@@ -44,8 +47,11 @@ public sealed class PaymentMethod
         if (trimmedName.Length > 50)
             throw new ArgumentException("El nombre del medio de pago no puede superar 50 caracteres.", nameof(name));
 
+        if (displayOrder < 1 || displayOrder > 999)
+            throw new ArgumentOutOfRangeException(nameof(displayOrder), "El orden de visualización debe estar entre 1 y 999.");
+
         Name = trimmedName;
-        NormalizedName = trimmedName.ToUpperInvariant();
+        NormalizedName = Normalize(trimmedName);
         DisplayOrder = displayOrder;
         UpdatedAtUtc = nowUtc;
     }
@@ -54,5 +60,22 @@ public sealed class PaymentMethod
     {
         IsActive = isActive;
         UpdatedAtUtc = nowUtc;
+    }
+
+    private static string Normalize(string value)
+    {
+        var normalizedString = value.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder();
+
+        foreach (var c in normalizedString)
+        {
+            var category = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c);
+            if (category != System.Globalization.UnicodeCategory.NonSpacingMark)
+            {
+                sb.Append(c);
+            }
+        }
+
+        return sb.ToString().Normalize(System.Text.NormalizationForm.FormC).Trim().ToUpperInvariant();
     }
 }

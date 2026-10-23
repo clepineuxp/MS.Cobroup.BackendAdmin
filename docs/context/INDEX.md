@@ -18,7 +18,7 @@ Los contratos modelan `user_id`, `tenant_id`, roles canónicos y rutas. `Adminis
 
 - .NET 10 / C# 14, solución `.slnx`, sin `src/`.
 - Health check: `/health`.
-- Persistencia PostgreSQL, identidad OIDC y configuración/rutas: implementadas hasta fase 3.
+- Persistencia PostgreSQL y configuración/rutas: implementadas hasta fase 3. La identidad JWT debe migrar a `HS256` con secreto independiente por ambiente (ADR-0007); la implementación aún requiere reauditoría.
 - Contratos: [fronteras v1](../contracts/platform-boundaries-v1.md).
-- Decisiones: [fundación](../decisions/0001-phase-1-foundation.md).
-- Roadmap: [propuesta](../roadmap/phase-proposal.md).
+- Decisiones: [fundación](../decisions/0001-phase-1-foundation.md), [autoridad JWT histórica](../decisions/0002-central-identity-authority.md), [RSA efímero histórico](../decisions/0006-ephemeral-rsa-signing-provider.md) y [firma HS256 vigente](../decisions/0007-symmetric-hs256-per-environment.md).
+- Roadmap: [propuesta](../roadmap/phase-proposal.md) y [backlog de firma simétrica](../../../cobroup.md/BACKLOG_SEGURIDAD_FIRMA_SIMETRICA.md).

@@ -16,19 +16,6 @@ public sealed class PaymentMethodService(IPaymentMethodRepository repository)
         return items.Select(PaymentMethodItem.FromDomain).ToArray();
     }
 
-    public async Task<PaymentMethodResult> ListAdminAsync(
-        TenantActor actor,
-        CancellationToken cancellationToken)
-    {
-        if (actor.Role is not UserRole.Admin)
-        {
-            return PaymentMethodResult.Failure("Solo el administrador puede gestionar los medios de pago.", PaymentMethodErrorType.Forbidden);
-        }
-
-        var items = await repository.ListAsync(actor.OrganizationId, activeOnly: false, cancellationToken);
-        // Returns list in success (we can wrap or return list of items)
-        return PaymentMethodResult.Ok(new PaymentMethodItem(Guid.Empty, string.Empty, 0, false, DateTime.UtcNow, DateTime.UtcNow));
-    }
 
     public async Task<IReadOnlyCollection<PaymentMethodItem>> ListAllForAdminAsync(
         TenantActor actor,

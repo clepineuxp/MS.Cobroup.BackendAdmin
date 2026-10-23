@@ -10,15 +10,15 @@ Aceptada durante la pausa de refinamiento de fase 3 (2026-10-21).
 2. La relación con una organización se representa mediante `OrganizationMembership`, que contiene el rol, estado, fecha de ingreso y `LastAccessedAtUtc`.
 3. El login recibe exclusivamente usuario y contraseña. Si existen membresías activas, selecciona la de acceso más reciente; si nunca se accedió, usa la membresía incorporada más recientemente como desempate inicial.
 4. Un usuario sin membresías activas obtiene el estado `membership_required` y no recibe tokens tenant. La interfaz muestra “Solicitar unirme a una organización”; el flujo de solicitud/aprobación se definirá antes de implementarlo.
-5. El usuario puede consultar sus membresías activas y seleccionar otra. La selección actualiza `LastAccessedAtUtc`, reemplaza la sesión de autoridad y obliga al frontend a revocar el refresh token anterior y obtener tokens nuevos.
+5. El usuario puede consultar sus membresías activas y seleccionar otra. La selección actualiza `LastAccessedAtUtc`, revoca la familia de refresh anterior y emite tokens nuevos asociados al tenant seleccionado.
 6. El tenant nunca se acepta en el login ni se toma de un parámetro de negocio: proviene de la membresía seleccionada y queda fijado en los claims del token.
 7. Cada responsabilidad HTTP tiene un controlador en el proyecto API. `Program.cs` se limita a composición, middleware y mapeo de controladores.
 
 ## Controladores actuales
 
-- `AuthController`: antiforgery, login, logout y contexto autenticado.
+- `AuthController`: antiforgery, login, refresh, logout y contexto autenticado.
 - `OrganizationSessionsController`: listado y cambio de organización activa.
-- `OidcController`: autorización, cierre OIDC y userinfo.
+- `SigningKeysController`: publicación de claves públicas JWT activas y en rotación.
 - `BootstrapController`: bootstrap único de plataforma.
 - `RoutesController`: configuración de rutas.
 - `HealthController`: estado técnico.

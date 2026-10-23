@@ -1,7 +1,7 @@
 using MS.Cobroup.BackendAdmin.Domain.Authorization;
 using MS.Cobroup.BackendAdmin.Domain.Routes;
 
-namespace MS.Cobroup.BackendAdmin.Core.Routes;
+namespace MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
 
 public interface IRouteManagementRepository
 {

@@ -1,6 +1,6 @@
 using MS.Cobroup.BackendAdmin.Domain.Routes;
 
-namespace MS.Cobroup.BackendAdmin.Core.LoanExceptions;
+namespace MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
 
 public interface ILoanExceptionAuditRepository
 {

@@ -1,37 +1,37 @@
-using MS.Cobroup.BackendAdmin.Domain.PaymentMethods;
+using MS.Cobroup.BackendAdmin.Domain.LoanTemplates;
 using MS.Cobroup.BackendAdmin.Domain.Routes;
 
-namespace MS.Cobroup.BackendAdmin.Core.PaymentMethods;
+namespace MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
 
-public interface IPaymentMethodRepository
+public interface ILoanTemplateRepository
 {
-    Task<IReadOnlyCollection<PaymentMethod>> ListAsync(
+    Task<IReadOnlyCollection<LoanTemplate>> ListAsync(
         Guid organizationId,
-        bool activeOnly,
+        bool publishedOnly,
         CancellationToken cancellationToken);
 
-    Task<PaymentMethod?> FindAsync(
+    Task<LoanTemplate?> FindAsync(
         Guid organizationId,
-        Guid paymentMethodId,
+        Guid templateId,
         CancellationToken cancellationToken);
 
     Task<bool> NameExistsAsync(
         Guid organizationId,
         string normalizedName,
-        Guid? excludedId,
+        Guid? excludedTemplateId,
         CancellationToken cancellationToken);
 
-    Task<PaymentMethodSaveOutcome> TryAddAsync(
-        PaymentMethod paymentMethod,
+    Task<LoanTemplateSaveOutcome> TryAddAsync(
+        LoanTemplate template,
         AdministrativeAuditRecord auditRecord,
         CancellationToken cancellationToken);
 
-    Task<PaymentMethodSaveOutcome> TrySaveAsync(
+    Task<LoanTemplateSaveOutcome> TrySaveAsync(
         AdministrativeAuditRecord auditRecord,
         CancellationToken cancellationToken);
 }
 
-public enum PaymentMethodSaveOutcome
+public enum LoanTemplateSaveOutcome
 {
     Saved,
     DuplicateName,

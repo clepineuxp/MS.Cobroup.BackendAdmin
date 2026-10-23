@@ -1,3 +1,10 @@
+# ==============================================================================
+# ARCHIVADO: Script de integración histórico de Fase 4 (OpenIddict / PKCE legado).
+# Este script se conserva exclusivamente como registro histórico de auditoría.
+# No debe utilizarse en entornos activos. La arquitectura vigente utiliza autenticación
+# directa JWT asimétrica (RS256) mediante cookies HttpOnly __Host-cobroup-refresh.
+# ==============================================================================
+
 param(
     [string]$IdentityBaseUrl = "https://localhost:7119",
     [string]$OperationsBaseUrl = "https://localhost:7088"

@@ -1,6 +1,6 @@
 using MS.Cobroup.BackendAdmin.Domain.Authorization;
 
-namespace MS.Cobroup.BackendAdmin.Core.Users;
+namespace MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
 
 public interface IUserDirectoryRepository
 {
