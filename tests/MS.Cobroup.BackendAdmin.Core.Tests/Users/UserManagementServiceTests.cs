@@ -12,7 +12,7 @@ public sealed class UserManagementServiceTests
     private readonly FakePasswords passwords = new();
     private readonly TenantActor admin = new(Guid.NewGuid(), Guid.NewGuid(), UserRole.Admin);
     private static CreateOrganizationUserInput Input(UserRole role = UserRole.Collector) =>
-        new(" cobrador.norte ", " Ana Pérez ", "long-test-password", role, "+57 300 1234567");
+        new(" cobrador.norte ", " Ana Pérez ", "1", role, "+57 300 1234567");
 
     [Theory]
     [InlineData(UserRole.Supervisor)]
@@ -68,7 +68,7 @@ public sealed class UserManagementServiceTests
     }
 
     [Theory]
-    [InlineData("short", "+573001234567")]
+    [InlineData("", "+573001234567")]
     [InlineData("long-test-password", "invalid")]
     [InlineData("long-test-password", "123")]
     public async Task RejectsInvalidCredentialsBeforeHashOrSave(string password, string phone)

@@ -24,3 +24,7 @@ Los contratos modelan `user_id`, `tenant_id`, roles canónicos y rutas. `Adminis
 - Contratos: [fronteras v1](../contracts/platform-boundaries-v1.md).
 - Decisiones: [fundación](../decisions/0001-phase-1-foundation.md), [autoridad JWT histórica](../decisions/0002-central-identity-authority.md), [RSA efímero histórico](../decisions/0006-ephemeral-rsa-signing-provider.md) y [firma HS256 vigente](../decisions/0007-symmetric-hs256-per-environment.md).
 - Roadmap: [propuesta](../roadmap/phase-proposal.md) y [backlog de firma simétrica](../../../cobroup.md/BACKLOG_SEGURIDAD_FIRMA_SIMETRICA.md).
+
+## Plantillas por rangos y cobro mensual — 2026-10-23
+
+Decisión vigente: [rangos, rutas y mensual](../../../cobroup.md/DECISION_PLANTILLAS_RANGOS_RUTAS.md). Monto/porcentaje mínimo y máximo inclusivos; plantillas publicadas asignadas explícitamente a la ruta del cliente, con validación del servidor. Mensual conserva el día de inicio por meses calendario. Migración administrativa preparada y pendiente de aplicación; no modifica condiciones de préstamos existentes.

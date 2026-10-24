@@ -10,12 +10,13 @@ public sealed class LoanTemplateServiceTests
 {
     private readonly Guid organizationId = Guid.NewGuid();
     private readonly Guid administratorId = Guid.NewGuid();
+    private readonly Guid routeId = Guid.NewGuid();
 
     [Fact]
     public async Task AdminCreatesTenantTemplateWithAudit()
     {
         var repository = new MemoryRepository();
-        var service = new LoanTemplateService(repository);
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
 
         var result = await service.CreateAsync(Admin(), Input(), CancellationToken.None);
 
@@ -30,7 +31,7 @@ public sealed class LoanTemplateServiceTests
     public async Task NonAdminCannotCreateOrListAdministrativeCatalog()
     {
         var repository = new MemoryRepository();
-        var service = new LoanTemplateService(repository);
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
         var collector = new TenantActor(Guid.NewGuid(), organizationId, UserRole.Collector);
 
         var creation = await service.CreateAsync(collector, Input(), CancellationToken.None);
@@ -46,7 +47,7 @@ public sealed class LoanTemplateServiceTests
     {
         var repository = new MemoryRepository();
         repository.Items.Add(CreatePublishedTemplate());
-        var service = new LoanTemplateService(repository);
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
         var collector = new TenantActor(Guid.NewGuid(), organizationId, UserRole.Collector);
 
         var result = await service.ListAsync(collector, publishedOnly: true, CancellationToken.None);
@@ -60,12 +61,59 @@ public sealed class LoanTemplateServiceTests
     public async Task DuplicateNameIsRejectedBeforePersistence()
     {
         var repository = new MemoryRepository { NameExists = true };
-        var service = new LoanTemplateService(repository);
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
 
         var result = await service.CreateAsync(Admin(), Input(), CancellationToken.None);
 
         Assert.Equal(LoanTemplateOutcome.Conflict, result.Outcome);
         Assert.Null(repository.Template);
+    }
+
+    [Fact]
+    public async Task RejectsRangesAndRoutesOutsideOrganization()
+    {
+        var repository = new MemoryRepository();
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
+        Assert.Equal(LoanTemplateOutcome.Invalid, (await service.CreateAsync(Admin(), Input() with { MinPrincipalAmount = 2_000_000m }, default)).Outcome);
+        Assert.Equal(LoanTemplateOutcome.Invalid, (await service.CreateAsync(Admin(), Input() with { MinPercentage = 20m, MaxPercentage = 10m }, default)).Outcome);
+        Assert.Equal(LoanTemplateOutcome.Invalid, (await service.CreateAsync(Admin(), Input() with { RouteIds = [Guid.NewGuid()] }, default)).Outcome);
+        Assert.Null(repository.Template);
+    }
+
+    [Fact]
+    public async Task CreatesContinuousRangeAndPreservesVersionAndAudit()
+    {
+        var repository = new MemoryRepository();
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
+        var result = await service.CreateAsync(Admin(), Input() with { MinPrincipalAmount = 100m, MinPercentage = 10m, MaxPercentage = 20m, RouteIds = [routeId] }, default);
+        Assert.Equal(LoanTemplateOutcome.Created, result.Outcome);
+        Assert.Equal(100m, result.Template!.MinPrincipalAmount);
+        Assert.Equal(10m, result.Template.MinPercentage);
+        Assert.Equal(20m, result.Template.MaxPercentage);
+        Assert.Equal(routeId, Assert.Single(result.Template.RouteIds));
+        Assert.Equal(100m, Assert.Single(result.Template.Versions).MinPrincipalAmount);
+        Assert.Contains("MinPrincipalAmount", repository.Audit!.DetailsJson);
+    }
+
+    [Fact]
+    public async Task UnassignedTemplatesAreNotAvailable()
+    {
+        var repository = new MemoryRepository();
+        repository.Items.Add(LoanTemplate.Create(organizationId, "Sin ruta", null, LoanTemplateClassification.Low, LoanTemplateStatus.Published, 30, 1000m, [10m], administratorId, DateTimeOffset.UtcNow));
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
+        Assert.Empty((await service.ListAsync(Admin(), true, default)).Templates);
+    }
+
+    private sealed class MemoryRoutes(Guid routeId) : MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories.IRouteManagementRepository
+    {
+        public Task<IReadOnlyCollection<AccessibleRouteSummary>> ListAccessibleAsync(Guid organizationId, Guid userId, UserRole role, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyCollection<AccessibleRouteSummary>>([new(routeId, "Ruta", null, role.ToString(), null, null)]);
+        public Task<IReadOnlyCollection<RouteSummary>> ListAsync(Guid organizationId, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<bool> NameExistsAsync(Guid organizationId, string normalizedName, Guid? excludedRouteId, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<IReadOnlyDictionary<Guid, UserRole>> GetActiveUserRolesAsync(Guid organizationId, IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<bool> TryAddAsync(CollectionRoute route, AdministrativeAuditRecord auditRecord, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<CollectionRoute?> FindAsync(Guid organizationId, Guid id, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<bool> SaveChangesAsync(AdministrativeAuditRecord auditRecord, CancellationToken cancellationToken) => throw new NotImplementedException();
     }
 
     private TenantActor Admin() => new(administratorId, organizationId, UserRole.Admin);
@@ -89,7 +137,7 @@ public sealed class LoanTemplateServiceTests
         1_000_000m,
         [5m],
         administratorId,
-        DateTimeOffset.UtcNow);
+        DateTimeOffset.UtcNow, routeIds: [routeId]);
 
     private sealed class MemoryRepository : ILoanTemplateRepository
     {

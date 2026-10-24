@@ -98,7 +98,7 @@ public sealed class LoanTemplatesController(LoanTemplateService service) : Contr
         request.Status,
         request.MaxLoanDays,
         request.MaxPrincipalAmount,
-        request.AllowedPercentages ?? []);
+        request.AllowedPercentages, request.MinPrincipalAmount, request.MinPercentage, request.MaxPercentage, request.RouteIds);
 }
 
 public sealed record UpsertLoanTemplateRequest(
@@ -108,4 +108,8 @@ public sealed record UpsertLoanTemplateRequest(
     LoanTemplateStatus Status,
     int MaxLoanDays,
     decimal MaxPrincipalAmount,
-    IReadOnlyCollection<decimal>? AllowedPercentages);
+    IReadOnlyCollection<decimal>? AllowedPercentages = null,
+    decimal MinPrincipalAmount = 0.01m,
+    decimal? MinPercentage = null,
+    decimal? MaxPercentage = null,
+    IReadOnlyCollection<Guid>? RouteIds = null);

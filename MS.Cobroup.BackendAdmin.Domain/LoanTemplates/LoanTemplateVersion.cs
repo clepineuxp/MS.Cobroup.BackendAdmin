@@ -17,7 +17,7 @@ public sealed class LoanTemplateVersion
         decimal maxPrincipalAmount,
         string allowedPercentagesJson,
         Guid recordedByUserId,
-        DateTimeOffset recordedAtUtc)
+        DateTimeOffset recordedAtUtc, decimal minPrincipalAmount, string routeIdsJson)
     {
         Id = Guid.NewGuid();
         LoanTemplateId = loanTemplateId;
@@ -28,6 +28,8 @@ public sealed class LoanTemplateVersion
         Status = status;
         MaxLoanDays = maxLoanDays;
         MaxPrincipalAmount = maxPrincipalAmount;
+        MinPrincipalAmount = minPrincipalAmount;
+        RouteIdsJson = routeIdsJson;
         AllowedPercentagesJson = allowedPercentagesJson;
         RecordedByUserId = recordedByUserId;
         RecordedAtUtc = recordedAtUtc;
@@ -48,6 +50,9 @@ public sealed class LoanTemplateVersion
     public LoanTemplateStatus Status { get; private set; }
 
     public int MaxLoanDays { get; private set; }
+
+    public decimal MinPrincipalAmount { get; private set; }
+    public string RouteIdsJson { get; private set; } = "[]";
 
     public decimal MaxPrincipalAmount { get; private set; }
 
