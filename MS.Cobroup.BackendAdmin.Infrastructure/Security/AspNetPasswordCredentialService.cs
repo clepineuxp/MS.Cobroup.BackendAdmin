@@ -9,11 +9,7 @@ public sealed class AspNetPasswordCredentialService(IPasswordHasher<object> pass
 {
     public string Hash(string password)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(password);
-        if (password.Length < 12)
-        {
-            throw new ArgumentException("Password must contain at least 12 characters.", nameof(password));
-        }
+        ArgumentException.ThrowIfNullOrEmpty(password);
 
         return passwordHasher.HashPassword(this, password);
     }

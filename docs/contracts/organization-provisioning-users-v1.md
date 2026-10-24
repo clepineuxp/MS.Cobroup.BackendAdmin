@@ -60,3 +60,7 @@ Core e integración HTTP aislada cubren roles, tenant del token, membresía inac
 ## Aplicación verificada — 2026-10-23
 
 Por instrucción expresa del propietario se aplicó `20261023235308_AddOrganizationOwnershipAndUserContact` en la base configurada de desarrollo `dev_cobroup_identity`. EF finalizó correctamente y la consulta posterior del historial no mostró migraciones pendientes. No se crearon organizaciones ni usuarios reales. Esta aplicación confirma el cambio de esquema en Dev; las pruebas PostgreSQL de atomicidad/concurrencia y el flujo por ingress continúan pendientes.
+
+## Diagnóstico del comando
+
+El script muestra stdout/stderr del proceso hijo antes de informar un código de salida fallido. La contraseña es obligatoria y no se recorta; no se imponen mínimos de longitud ni composición, incluida la capa de hashing. Se conserva ASP.NET Identity PasswordHasher y nunca se devuelve contraseña o hash en el resultado del aprovisionamiento.
