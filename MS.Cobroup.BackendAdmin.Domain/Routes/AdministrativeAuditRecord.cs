@@ -49,6 +49,12 @@ public sealed class AdministrativeAuditRecord
         DateTimeOffset occurredAtUtc) =>
         new(Guid.NewGuid(), organizationId, actorUserId, "route.created", "route", routeId, occurredAtUtc, null);
 
+    public static AdministrativeAuditRecord OrganizationProvisioned(Guid organizationId, Guid ownerUserId, DateTimeOffset occurredAtUtc) =>
+        new(Guid.NewGuid(), organizationId, ownerUserId, "organization.provisioned", "organization", organizationId, occurredAtUtc, null);
+
+    public static AdministrativeAuditRecord UserCreated(Guid organizationId, Guid actorUserId, Guid userId, DateTimeOffset occurredAtUtc) =>
+        new(Guid.NewGuid(), organizationId, actorUserId, "user.created", "user", userId, occurredAtUtc, null);
+
     public static AdministrativeAuditRecord RouteUpdated(
         Guid organizationId,
         Guid actorUserId,

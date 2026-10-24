@@ -4,9 +4,9 @@
 
 - Producto: COBROUP
 - Rol: microservicio administrativo por tenant.
-- Documento maestro: `../cobroup.md/COBROUP.md` 1.7.0 y `../cobroup.md/DECISION_AUTENTICACION_JWT.md`.
+- Documento maestro: `../cobroup.md/COBROUP.md` 1.11.0 y `../cobroup.md/DECISION_AUTENTICACION_JWT.md`.
 - Estándar: `../cobroup.md/FRAMEWORK_DESARROLLO_CSHARP.md` 2.0.
-- Rama activa observada: `feature/solucion-hallazgos-iniciales`.
+- Rama activa observada: `feature/organizaciones-usuarios`, creada desde `dev` por instrucción del usuario.
 - Prohibidos push, merge, tag y PR sin autorización.
 
 ## Estado actual
@@ -401,3 +401,21 @@
 - **Seguridad**: la contraseña visible en el workflow pertenece únicamente al contenedor efímero del runner y no corresponde a ningún ambiente desplegado; no requiere un GitHub Secret.
 - **Verificación local**: restauración de `dotnet-ef` 10.0.11 correcta; la factoría de diseño resolvió `ConnectionStrings__IdentityDatabase`; compilación Release con 0 warnings/errores y suite completa en verde (Core 51/51, Infrastructure 97/97; total 148/148).
 - **Git**: Cambios preservados en working tree; sin commit, push, merge, tag ni PR.
+
+### 2026-10-23 — Aprovisionamiento privado y usuarios de organización
+
+- Solicitud: crear organizaciones con administrador dueño y permitir altas de supervisores y colaboradores desde frontend admin. El usuario confirmó script privado y equivalencia colaborador–Collector; pidió basarse en el maestro/framework C# y ramas feature desde dev.
+- Normativa efectiva: COBROUP 1.11.0, FRAMEWORK_DESARROLLO_CSHARP 2.0 y decisión JWT vigente. Alcance registrado en la decisión de aprovisionamiento del repositorio documental.
+- Git: `feature/organizaciones-usuarios` creada desde `dev` (52f39a0, igual a origin/dev al consultar); se conservaron los cambios iniciados en la rama feature anterior. Commit autorizado: NO; sin push, merge, tag ni PR.
+- Cambios: puertos Domain, casos de uso Core, repositorios EF y transporte HTTP/CLI; script PowerShell local/Kubernetes; usuario global con teléfono y fecha de actualización; membresía con dueño único filtrado; migración aditiva; auditoría atómica. GET/POST usuarios exige Admin activo en el tenant del JWT y solo crea Supervisor/Collector. El comando privado crea organización/dueño sin servidor HTTP ni secretos en argumentos.
+- Verificación: build Release correcto, 0 warnings/errores; Core 66/66; Infrastructure y HTTP/CLI aislados 98/98. Pruebas nuevas de PostgreSQL para atomicidad/duplicados/concurrencia compiladas, no ejecutadas localmente. Se excluyeron AuthLifecycleHttpTests y clases Postgres porque requieren PostgreSQL real; no se modificó la base desplegada.
+- Migración: EF no detecta cambios pendientes de modelo; SQL idempotente generado en artifacts/organization-provisioning-migration.sql sin aplicar. Script PowerShell sin errores de sintaxis; smoke del ejecutable real rechazó stdin inválido con exit 1, sin iniciar HTTP ni consultar base.
+- Límites: validar migración y pruebas PostgreSQL en la base aislada de CI, y flujo por ingress antes del despliegue. Organizaciones históricas conservan administradores; no se inventan dueños ni teléfonos. Auditoría independiente no realizada; la reapertura de JWT no se cierra con esta intervención.
+
+### 2026-10-23 — Aplicación de migración y autorización de commits
+
+- Solicitud expresa: aplicar migraciones y hacer commit del alcance de organizaciones/usuarios.
+- Destino verificado sin exponer credenciales: PostgreSQL `dev_cobroup_identity`, conexión de desarrollo obtenida de User Secrets e inyectada únicamente al proceso EF.
+- Resultado: `dotnet ef database update AddOrganizationOwnershipAndUserContact --configuration Release --no-build` aplicó `20261023235308_AddOrganizationOwnershipAndUserContact` correctamente. `dotnet ef migrations list` confirmó las once migraciones aplicadas, sin pendientes.
+- La validación PostgreSQL de transacciones/concurrencia y el flujo por ingress siguen pendientes; no se ejecutaron pruebas de creación de usuarios sobre la base de desarrollo ni se crearon cuentas reales.
+- Commit autorizado: SÍ, alcance de aprovisionamiento/usuarios, migración y documentación de esta solicitud. Push, merge, tag y PR no solicitados.
