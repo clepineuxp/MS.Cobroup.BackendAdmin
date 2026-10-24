@@ -6,6 +6,8 @@ Autoridad administrativa para configuración de organización, rutas, asignacion
 
 ## Límites
 
+- Organizaciones y equipo: [aprovisionamiento privado y usuarios v1](../contracts/organization-provisioning-users-v1.md). Alta de organización con dueño por CLI; listado y creación tenant-safe de supervisores y colaboradores desde el panel.
+
 - Propio: configuración organizacional, rutas, cupos heredables, asignaciones y sus contratos de consulta/auditoría.
 - No propio: Customer, Loan, Installment, Payment y PaymentEvidence.
 - Consultas operativas de mapas/reportes deberán usar API o proyecciones; nunca escrituras directas en tablas operativas.

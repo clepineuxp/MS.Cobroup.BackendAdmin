@@ -142,6 +142,10 @@ builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IIdentityRepository, EfIdentityRepository>();
 builder.Services.AddScoped<IRouteManagementRepository, EfRouteManagementRepository>();
 builder.Services.AddScoped<IUserDirectoryRepository, EfUserDirectoryRepository>();
+builder.Services.AddScoped<IUserManagementRepository, EfUserManagementRepository>();
+builder.Services.AddScoped<IOrganizationProvisioningRepository, EfOrganizationProvisioningRepository>();
+builder.Services.AddScoped<UserManagementService>();
+builder.Services.AddScoped<ProvisionOrganizationService>();
 builder.Services.AddScoped<IOrganizationSettingsRepository, EfOrganizationSettingsRepository>();
 builder.Services.AddScoped<ILoanTemplateRepository, EfLoanTemplateRepository>();
 builder.Services.AddScoped<IPasswordCredentialService, AspNetPasswordCredentialService>();
@@ -208,6 +212,11 @@ builder.Services.AddSingleton<IAdministrativeScopeAuthorizer, AdministrativeScop
 builder.Services.AddScoped<IOperationalSessionRevocationService, OperationalSessionRevocationService>();
 
 var app = builder.Build();
+
+if (args.Contains("--provision-organization"))
+{
+    return await MS.Cobroup.BackendAdmin.Api.Provisioning.OrganizationProvisioningCli.RunAsync(app.Services, Console.In, Console.Out, Console.Error);
+}
 
 if (args.Length > 0 && (args.Contains("--revoke-kid") || args.Contains("--revoke-all")))
 {

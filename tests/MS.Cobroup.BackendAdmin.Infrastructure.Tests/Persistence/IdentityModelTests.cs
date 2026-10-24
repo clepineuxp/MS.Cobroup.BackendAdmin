@@ -9,6 +9,21 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Tests.Persistence;
 public sealed class IdentityModelTests
 {
     [Fact]
+    public void OwnershipHasFilteredUniqueIndexWithoutRestrictingOrdinaryMemberships()
+    {
+        var options = new DbContextOptionsBuilder<IdentityDbContext>().UseNpgsql("Host=localhost;Database=model_test;Username=model_test");
+        using var context = new IdentityDbContext(options.Options);
+        var membership = context.Model.FindEntityType(typeof(OrganizationMembership))!;
+        var index = Assert.Single(membership.GetIndexes(), item => item.Properties.Select(property => property.Name)
+            .SequenceEqual(["OrganizationId", "IsOwner"]));
+        Assert.True(index.IsUnique);
+        Assert.Equal("\"IsOwner\" = TRUE", index.GetFilter());
+        Assert.Contains(membership.GetIndexes(), item => !item.IsUnique && item.Properties.Select(property => property.Name).SequenceEqual(["OrganizationId"]));
+        var sql = context.Database.GenerateCreateScript();
+        Assert.Contains("WHERE \"IsOwner\" = TRUE", sql);
+    }
+
+    [Fact]
     public void UserModel_EnforcesGlobalUsernameAndMembershipUniqueness()
     {
         var builder = new DbContextOptionsBuilder<IdentityDbContext>();

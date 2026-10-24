@@ -43,6 +43,8 @@ public sealed class OrganizationMembership
 
     public UserRole Role { get; private set; }
 
+    public bool IsOwner { get; private set; }
+
     public bool IsActive { get; private set; }
 
     public DateTimeOffset JoinedAtUtc { get; private set; }
@@ -65,6 +67,13 @@ public sealed class OrganizationMembership
         }
 
         LastAccessedAtUtc = accessedAtUtc;
+    }
+
+    public static OrganizationMembership CreateOwner(Guid userId, Guid organizationId, DateTimeOffset joinedAtUtc)
+    {
+        var membership = Create(userId, organizationId, UserRole.Admin, joinedAtUtc, markAsAccessed: true);
+        membership.IsOwner = true;
+        return membership;
     }
 
     public void Deactivate()

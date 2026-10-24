@@ -83,6 +83,13 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)");
 
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(80)
@@ -153,6 +160,9 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsOwner")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset>("JoinedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -167,6 +177,10 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                     b.HasKey("UserId", "OrganizationId");
 
                     b.HasIndex("OrganizationId");
+
+                    b.HasIndex("OrganizationId", "IsOwner")
+                        .IsUnique()
+                        .HasFilter("\"IsOwner\" = TRUE");
 
                     b.HasIndex("UserId", "LastAccessedAtUtc");
 

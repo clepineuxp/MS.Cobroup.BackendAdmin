@@ -1,5 +1,7 @@
 # MS.Cobroup.BackendAdmin
 
+Alta privada de organizaciones y administración del equipo: [contrato y procedimiento](docs/contracts/organization-provisioning-users-v1.md). El script `scripts/provision-organization.ps1` crea una organización con su administrador dueño; `GET|POST /api/v1/users` permite a administradores activos listar y crear supervisores y colaboradores en su tenant.
+
 Microservicio administrativo y autoridad JWT única de COBROUP. Los usuarios son identidades globales y pueden tener membresías con rol en varias organizaciones. El login usa solamente usuario y contraseña, selecciona la última organización accedida y permite cambiarla emitiendo un nuevo par de tokens y revocando la familia anterior. La fase 3 completa la configuración tenant-safe de organización, rutas, cupos y asignaciones.
 
 En fase 4 expone `GET|POST /api/v1/customers` y `GET|PUT /api/v1/customers/{id}` como fachada exclusiva para `Admin`; reenvía el token al backend operativo y no escribe sus tablas.

@@ -57,6 +57,7 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.Property(item => item.NormalizedUsername).HasMaxLength(80).IsRequired();
             entity.Property(item => item.DisplayName).HasMaxLength(160).IsRequired();
             entity.Property(item => item.PasswordHash).HasMaxLength(512).IsRequired();
+            entity.Property(item => item.PhoneNumber).HasMaxLength(24);
             entity.HasIndex(item => item.NormalizedUsername).IsUnique();
         });
 
@@ -66,6 +67,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.HasKey(item => new { item.UserId, item.OrganizationId });
             entity.Property(item => item.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
             entity.HasIndex(item => new { item.UserId, item.LastAccessedAtUtc });
+            entity.HasIndex(item => item.OrganizationId);
+            entity.HasIndex(item => new { item.OrganizationId, item.IsOwner }).IsUnique().HasFilter("\"IsOwner\" = TRUE");
             entity.HasOne(item => item.User)
                 .WithMany()
                 .HasForeignKey(item => item.UserId)

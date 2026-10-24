@@ -36,12 +36,22 @@ public sealed class ApplicationUser
 
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
+    public DateTimeOffset UpdatedAtUtc { get; private set; }
+
+    public string? PhoneNumber { get; private set; }
+
     public static ApplicationUser Create(
         string username,
         string displayName,
         string passwordHash,
-        DateTimeOffset createdAtUtc) =>
-        new(Guid.NewGuid(), username, displayName, passwordHash, createdAtUtc);
+        DateTimeOffset createdAtUtc,
+        string? phoneNumber = null)
+    {
+        var user = new ApplicationUser(Guid.NewGuid(), username, displayName, passwordHash, createdAtUtc);
+        user.UpdatedAtUtc = createdAtUtc;
+        user.PhoneNumber = phoneNumber is null ? null : Require(phoneNumber, nameof(phoneNumber), 24);
+        return user;
+    }
 
     public static string NormalizeUsername(string value) =>
         Require(value, nameof(value), 80).ToUpperInvariant();
