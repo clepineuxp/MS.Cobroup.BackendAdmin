@@ -12,7 +12,7 @@ public sealed class ProvisionOrganizationServiceTests
     {
         var repository = new MemoryProvisioning();
         var result = await new ProvisionOrganizationService(repository, new FakePasswords()).ExecuteAsync(
-            new(" norte ", " Organización Norte ", "owner.norte", "Dueño Norte", "private-owner-password", "+573001234567"), default);
+            new(" norte ", " Organización Norte ", "owner.norte", "Dueño Norte", "1", "+573001234567"), default);
         Assert.True(result.Created);
         Assert.Equal("NORTE", repository.Organization!.Code);
         Assert.Equal(result.OrganizationId, repository.Membership!.OrganizationId);
@@ -30,7 +30,7 @@ public sealed class ProvisionOrganizationServiceTests
     {
         var repository = new MemoryProvisioning { Created = false };
         var result = await new ProvisionOrganizationService(repository, new FakePasswords()).ExecuteAsync(
-            new("norte", "Norte", "owner", "Owner", "private-owner-password", "+573001234567"), default);
+            new("norte", "Norte", "owner", "Owner", "1", "+573001234567"), default);
         Assert.False(result.Created);
         Assert.Null(result.OrganizationId);
         Assert.Null(result.OwnerUserId);
@@ -41,7 +41,7 @@ public sealed class ProvisionOrganizationServiceTests
     {
         var repository = new MemoryProvisioning();
         await Assert.ThrowsAsync<ArgumentException>(() => new ProvisionOrganizationService(repository, new FakePasswords()).ExecuteAsync(
-            new("norte", "Norte", "owner", "Owner", "short", "+573001234567"), default));
+            new("norte", "Norte", "owner", "Owner", "", "+573001234567"), default));
         Assert.Equal(0, repository.Calls);
     }
 

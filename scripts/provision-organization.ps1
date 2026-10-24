@@ -10,14 +10,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$securePassword = Read-Host 'Contraseña del administrador dueño (12 a 128 caracteres)' -AsSecureString
+$securePassword = Read-Host 'Contraseña del administrador dueño' -AsSecureString
 $passwordPointer = [IntPtr]::Zero
 $process = $null
 try {
     $passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
     $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
-    if ([string]::IsNullOrWhiteSpace($password) -or $password.Length -lt 12 -or $password.Length -gt 128) {
-        throw 'La contraseña debe tener entre 12 y 128 caracteres.'
+    if ([string]::IsNullOrEmpty($password)) {
+        throw 'La contraseña es obligatoria.'
     }
     $payload = @{
         organizationCode = $OrganizationCode

@@ -419,3 +419,10 @@
 - Resultado: `dotnet ef database update AddOrganizationOwnershipAndUserContact --configuration Release --no-build` aplicó `20261023235308_AddOrganizationOwnershipAndUserContact` correctamente. `dotnet ef migrations list` confirmó las once migraciones aplicadas, sin pendientes.
 - La validación PostgreSQL de transacciones/concurrencia y el flujo por ingress siguen pendientes; no se ejecutaron pruebas de creación de usuarios sobre la base de desarrollo ni se crearon cuentas reales.
 - Commit autorizado: SÍ, alcance de aprovisionamiento/usuarios, migración y documentación de esta solicitud. Push, merge, tag y PR no solicitados.
+
+### 2026-10-23 — Contraseñas sin requisitos de longitud ni complejidad
+
+- Solicitud expresa: permitir contraseñas como `1` al crear usuarios.
+- Cambio: contraseña obligatoria y sin recortar; eliminados mínimos, máximos y reglas de composición del alta administrativa, validación Core compartida y script privado del dueño. Hash existente conservado.
+- Verificación: Core 66/66 y frontend administrativo 46/46, con casos de alta usando `1`; build productivo Angular correcto. No se probó contra servicios desplegados ni se crearon cuentas reales.
+- Rama feature/organizaciones-usuarios; commit autorizado por el usuario; sin push ni despliegue.

@@ -21,7 +21,7 @@ El proceso devuelve los IDs de organización y dueño. Códigos de salida: `0` c
 
 ## Validación y almacenamiento
 
-Username obligatorio hasta 80 caracteres; nombre obligatorio hasta 160; teléfono obligatorio de 7 a 24 caracteres con al menos 7 dígitos; contraseña de 12 a 128 caracteres sin recortar su contenido. Se conserva el hash resistente de ASP.NET Identity existente. Fechas en UTC.
+Username obligatorio hasta 80 caracteres; nombre obligatorio hasta 160; teléfono obligatorio de 7 a 24 caracteres con al menos 7 dígitos; contraseña obligatoria, sin requisitos de longitud ni complejidad y sin recortar su contenido (se admite `1`). Se conserva el hash resistente de ASP.NET Identity existente. Fechas en UTC.
 
 La migración `AddOrganizationOwnershipAndUserContact` incorpora teléfono nullable para datos históricos, fecha de actualización inicializada desde la creación e indicador de dueño con índice único filtrado. Conserva el índice de consulta por organización. No inventa teléfonos ni adjudica dueños retroactivamente a organizaciones existentes; sus administradores conservan permisos.
 
