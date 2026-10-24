@@ -21,6 +21,16 @@ El proceso devuelve los IDs de organización y dueño. Códigos de salida: `0` c
 
 ## Validación y almacenamiento
 
+### Edición de usuarios
+
+`PUT /api/v1/users/{id}` acepta username, displayName, phoneNumber, role, isActive y password opcional. Null o cadena vacía conserva el hash anterior. Requiere Admin activo y membresía objetivo del tenant del token. Devuelve 200, 400, 401, 403, 404 o 409 según actualización, validación, autorización, pertenencia o conflicto. El header de consistencia tiene la misma función que en creación.
+
+El dueño conserva su rol/acceso y cada administrador solo modifica su propio perfil administrativo. Los usuarios operativos no se convierten en administradores por edición. Para cambiar rol o desactivar una membresía se reasignan antes sus rutas activas. Una cuenta compartida entre organizaciones solo admite cambios locales de rol/estado desde este panel; su perfil global y contraseña quedan protegidos.
+
+Datos, auditoría con antes/después sin credenciales y revocación de refresh se guardan en una transacción. Username/contraseña revocan refresh de toda la cuenta; rol/estado, los de esta organización. Los access JWT ya emitidos conservan su vencimiento normal. No requiere migración nueva. Detalle: [decisión de ubicación y edición](../../../cobroup.md/DECISION_UBICACION_CLIENTES_EDICION_USUARIOS.md).
+
+### Reglas de los datos
+
 Username obligatorio hasta 80 caracteres; nombre obligatorio hasta 160; teléfono obligatorio de 7 a 24 caracteres con al menos 7 dígitos; contraseña obligatoria, sin requisitos de longitud ni complejidad y sin recortar su contenido (se admite `1`). Se conserva el hash resistente de ASP.NET Identity existente. Fechas en UTC.
 
 La migración `AddOrganizationOwnershipAndUserContact` incorpora teléfono nullable para datos históricos, fecha de actualización inicializada desde la creación e indicador de dueño con índice único filtrado. Conserva el índice de consulta por organización. No inventa teléfonos ni adjudica dueños retroactivamente a organizaciones existentes; sus administradores conservan permisos.

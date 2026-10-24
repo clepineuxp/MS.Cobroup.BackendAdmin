@@ -55,6 +55,9 @@ public sealed class AdministrativeAuditRecord
     public static AdministrativeAuditRecord UserCreated(Guid organizationId, Guid actorUserId, Guid userId, DateTimeOffset occurredAtUtc) =>
         new(Guid.NewGuid(), organizationId, actorUserId, "user.created", "user", userId, occurredAtUtc, null);
 
+    public static AdministrativeAuditRecord UserUpdated(Guid organizationId, Guid actorUserId, Guid userId, DateTimeOffset occurredAtUtc, string detailsJson) =>
+        new(Guid.NewGuid(), organizationId, actorUserId, "user.updated", "user", userId, occurredAtUtc, detailsJson);
+
     public static AdministrativeAuditRecord RouteUpdated(
         Guid organizationId,
         Guid actorUserId,

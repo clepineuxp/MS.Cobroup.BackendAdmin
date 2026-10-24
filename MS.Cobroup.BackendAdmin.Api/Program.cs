@@ -158,6 +158,8 @@ builder.Services.AddScoped<IRouteManagementRepository, EfRouteManagementReposito
 builder.Services.AddScoped<IUserDirectoryRepository, EfUserDirectoryRepository>();
 builder.Services.AddScoped<IUserManagementRepository, EfUserManagementRepository>();
 builder.Services.AddScoped<UserManagementService>();
+builder.Services.AddScoped<IUserEditingRepository, EfUserEditingRepository>();
+builder.Services.AddScoped<UpdateOrganizationUserService>();
 builder.Services.AddScoped<IOrganizationSettingsRepository, EfOrganizationSettingsRepository>();
 builder.Services.AddScoped<ILoanTemplateRepository, EfLoanTemplateRepository>();
 builder.Services.AddScoped<IPasswordCredentialService, AspNetPasswordCredentialService>();

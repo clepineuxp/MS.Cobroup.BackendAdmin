@@ -71,8 +71,36 @@ public sealed class PostgresOrganizationProvisioningTests : IAsyncLifetime
         var directory = await new EfUserDirectoryRepository(db).ListAssignableAsync(membership.OrganizationId, default);
         Assert.Equal(created.User!.Id, Assert.Single(directory).Id);
         Assert.Equal(2, (await users.ListAsync(actor, default)).Users!.Count);
+        var token = new MS.Cobroup.BackendAdmin.Domain.Identity.RefreshToken(Guid.NewGuid(), created.User.Id, membership.OrganizationId,
+            Guid.NewGuid().ToString("N"), DateTimeOffset.UtcNow.AddDays(1), DateTimeOffset.UtcNow, "test-key");
+        db.RefreshTokens.Add(token); await db.SaveChangesAsync();
+        var updateService = new UpdateOrganizationUserService(new EfUserManagementRepository(db), new EfUserEditingRepository(db), passwords);
+        var updated = await updateService.ExecuteAsync(actor, created.User.Id,
+            new(created.User.Username, "Updated Collector", "+573001234567", UserRole.Supervisor, true), default);
+        Assert.Equal(UserUpdateOutcome.Success, updated.Outcome);
+        db.ChangeTracker.Clear();
+        Assert.Equal("Updated Collector", (await db.Users.SingleAsync(item => item.Id == created.User.Id)).DisplayName);
+        Assert.Equal(UserRole.Supervisor, (await db.OrganizationMemberships.SingleAsync(item => item.UserId == created.User.Id && item.OrganizationId == membership.OrganizationId)).Role);
+        Assert.NotNull((await db.RefreshTokens.SingleAsync(item => item.Id == token.Id)).RevokedAtUtc);
+        Assert.Contains(await db.AdministrativeAuditRecords.Where(item => item.OrganizationId == membership.OrganizationId).ToArrayAsync(), item => item.EventType == "user.updated");
         var forged = actor with { OrganizationId = Guid.NewGuid() };
         Assert.Equal(UserManagementOutcome.Forbidden, (await users.ListAsync(forged, default)).Outcome);
+    }
+
+    [Fact]
+    public async Task DuplicateUsernameDuringEditingRollsBackProfileAndAudit()
+    {
+        var first = await Provision(Command("a")); var second = await Provision(Command("b"));
+        await using var db = new IdentityDbContext(options);
+        var target = await db.Users.SingleAsync(item => item.Id == second.OwnerUserId);
+        var originalName = target.Username;
+        var service = new UpdateOrganizationUserService(new EfUserManagementRepository(db), new EfUserEditingRepository(db), passwords);
+        var result = await service.ExecuteAsync(new(target.Id, second.OrganizationId!.Value, UserRole.Admin), target.Id,
+            new(Command("a").Username, "Changed Owner", "+573001234567", UserRole.Admin, true), default);
+        Assert.Equal(UserUpdateOutcome.Conflict, result.Outcome);
+        db.ChangeTracker.Clear();
+        Assert.Equal(originalName, (await db.Users.SingleAsync(item => item.Id == target.Id)).Username);
+        Assert.DoesNotContain(await db.AdministrativeAuditRecords.Where(item => item.OrganizationId == second.OrganizationId).ToArrayAsync(), item => item.EventType == "user.updated");
     }
 
     [Fact]

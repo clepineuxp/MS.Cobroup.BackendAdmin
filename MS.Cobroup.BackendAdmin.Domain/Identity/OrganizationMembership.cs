@@ -80,4 +80,13 @@ public sealed class OrganizationMembership
     {
         IsActive = false;
     }
+
+    public void UpdateAccess(UserRole role, bool isActive)
+    {
+        if (!Enum.IsDefined(role)) throw new ArgumentException("Invalid role.", nameof(role));
+        if (IsOwner && (role != UserRole.Admin || !isActive))
+            throw new InvalidOperationException("The organization owner must remain an active administrator.");
+        Role = role;
+        IsActive = isActive;
+    }
 }
