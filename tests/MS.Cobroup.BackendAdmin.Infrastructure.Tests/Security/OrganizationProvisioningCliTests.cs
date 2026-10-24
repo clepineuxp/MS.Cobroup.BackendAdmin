@@ -6,11 +6,30 @@ using MS.Cobroup.BackendAdmin.Domain.Identity;
 using MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
 using MS.Cobroup.BackendAdmin.Domain.Interfaces.Services;
 using MS.Cobroup.BackendAdmin.Domain.Routes;
+using Microsoft.AspNetCore.Identity;
+using MS.Cobroup.BackendAdmin.Infrastructure.Security;
 
 namespace MS.Cobroup.BackendAdmin.Infrastructure.Tests.Security;
 
 public sealed class OrganizationProvisioningCliTests
 {
+    [Fact]
+    public async Task OneCharacterPasswordWorksThroughRealHashingAndCli()
+    {
+        using var services = new ServiceCollection()
+            .AddSingleton<IOrganizationProvisioningRepository>(new Repository(true))
+            .AddSingleton<IPasswordHasher<object>, PasswordHasher<object>>()
+            .AddSingleton<IPasswordCredentialService, AspNetPasswordCredentialService>()
+            .AddScoped<ProvisionOrganizationService>().BuildServiceProvider();
+        var json = JsonSerializer.Serialize(new ProvisionOrganizationCommand("NORTE", "Norte", "owner", "Owner", "1", "+573001234567"));
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var code = await OrganizationProvisioningCli.RunAsync(services, new StringReader(json), output, error);
+        Assert.Equal(0, code);
+        Assert.Empty(error.ToString());
+        Assert.DoesNotContain("password", output.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData(true, 0)]
     [InlineData(false, 2)]

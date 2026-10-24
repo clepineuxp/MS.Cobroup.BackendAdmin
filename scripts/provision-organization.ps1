@@ -40,6 +40,10 @@ try {
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardInput = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
+    $startInfo.StandardErrorEncoding = [Text.UTF8Encoding]::new($false)
     $startInfo.FileName = $executable.Source
     if ($Namespace) {
         $arguments = @('exec', '-i', '-n', $Namespace, 'deployment/admin-backend', '--',
@@ -62,11 +66,18 @@ try {
         $startInfo.Arguments = $quotedArguments -join ' '
     }
     $process = [Diagnostics.Process]::Start($startInfo)
+    # Drain both streams concurrently, including dotnet build errors, without hidden windows.
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
     # Write UTF-8 directly: StandardInputEncoding is unavailable on .NET Framework.
     $payloadBytes = [Text.UTF8Encoding]::new($false).GetBytes($payload)
     $process.StandardInput.BaseStream.Write($payloadBytes, 0, $payloadBytes.Length)
     $process.StandardInput.Close()
     $process.WaitForExit()
+    $stdout = $stdoutTask.GetAwaiter().GetResult()
+    $stderr = $stderrTask.GetAwaiter().GetResult()
+    if (-not [string]::IsNullOrWhiteSpace($stdout)) { Write-Output $stdout.TrimEnd() }
+    if (-not [string]::IsNullOrWhiteSpace($stderr)) { [Console]::Error.WriteLine($stderr.TrimEnd()) }
     if ($process.ExitCode -ne 0) { throw "El aprovisionamiento terminó con código $($process.ExitCode)." }
 } finally {
     $password = $null

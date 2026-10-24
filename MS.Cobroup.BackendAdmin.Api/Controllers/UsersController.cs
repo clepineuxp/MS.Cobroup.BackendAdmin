@@ -8,8 +8,26 @@ namespace MS.Cobroup.BackendAdmin.Api.Controllers;
 [ApiController]
 [Route("api/v1/users")]
 [Authorize(Policy = "tenant-admin")]
-public sealed class UsersController(ListAssignableUsersService users, UserManagementService management) : ControllerBase
+public sealed class UsersController(ListAssignableUsersService users, UserManagementService management, UpdateOrganizationUserService update) : ControllerBase
 {
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> Update(Guid id, UpdateOrganizationUserInput input, CancellationToken cancellationToken)
+    {
+        if (!TenantActorReader.TryRead(User, out var actor)) return Unauthorized();
+        if (Request.Headers.TryGetValue("X-Cobroup-Expected-Organization", out var expected)
+            && (!Guid.TryParse(expected, out var expectedId) || expectedId != actor.OrganizationId))
+            return Conflict(new { code = "organization_changed", message = "La organización de la sesión cambió. Revisa la organización activa.", traceId = HttpContext.TraceIdentifier });
+        var result = await update.ExecuteAsync(actor, id, input, cancellationToken);
+        return result.Outcome switch
+        {
+            UserUpdateOutcome.Success => Ok(result.User),
+            UserUpdateOutcome.Forbidden => Forbid(),
+            UserUpdateOutcome.NotFound => NotFound(new { code = "user_not_found", message = "El usuario no pertenece a esta organización.", traceId = HttpContext.TraceIdentifier }),
+            UserUpdateOutcome.Conflict => Conflict(new { code = "user_conflict", message = result.Error, traceId = HttpContext.TraceIdentifier }),
+            _ => BadRequest(new { code = "invalid_user", message = result.Error, traceId = HttpContext.TraceIdentifier })
+        };
+    }
+
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
     {

@@ -30,7 +30,10 @@ public sealed class UserManagementHttpTests
             builder.UseSetting("Identity:Issuer", Issuer);
             builder.UseSetting("Jwt:SigningKeyBase64", Convert.ToBase64String(Key));
             builder.UseSetting("Jwt:ActiveKeyId", "users-http-test");
-            builder.ConfigureServices(services => services.AddSingleton<IUserManagementRepository>(repository));
+            builder.ConfigureServices(services => {
+                services.AddSingleton<IUserManagementRepository>(repository);
+                services.AddSingleton<IUserEditingRepository>(repository);
+            });
         });
 
     private HttpClient Client(WebApplicationFactory<Program> factory, UserRole? role)
@@ -66,6 +69,45 @@ public sealed class UserManagementHttpTests
         username = "equipo.norte", displayName = "Equipo Norte", password = "private-password-test",
         phoneNumber = "+573001234567", role, organizationId = Guid.NewGuid()
     };
+
+    private static object UpdatePayload(string role = "Collector") => new {
+        username = "equipo.norte", displayName = "Equipo Actualizado", phoneNumber = "+573001234567", role, isActive = true, password = (string?)null
+    };
+
+    [Fact]
+    public async Task UpdatesOnlyTenantMemberAndDoesNotExposeCredentials()
+    {
+        var repository = new MemoryUsers(organizationId, adminId);
+        var user = ApplicationUser.Create("equipo.norte", "Equipo Norte", "old-hash", DateTimeOffset.UtcNow, "+573001234567");
+        repository.Editable = OrganizationMembership.Create(user.Id, organizationId, UserRole.Collector, DateTimeOffset.UtcNow);
+        typeof(OrganizationMembership).GetProperty(nameof(OrganizationMembership.User))!.SetValue(repository.Editable, user);
+        using var factory = Factory(repository); using var client = Client(factory, UserRole.Admin);
+        var response = await client.PutAsJsonAsync($"/api/v1/users/{user.Id}", UpdatePayload());
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Equipo Actualizado", user.DisplayName); Assert.Equal("old-hash", user.PasswordHash);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("hash", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("password", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.PutAsJsonAsync($"/api/v1/users/{Guid.NewGuid()}", UpdatePayload())).StatusCode);
+    }
+
+    [Theory]
+    [InlineData(null, HttpStatusCode.Unauthorized)]
+    [InlineData(UserRole.Supervisor, HttpStatusCode.Forbidden)]
+    [InlineData(UserRole.Collector, HttpStatusCode.Forbidden)]
+    public async Task UpdateRejectsUnauthenticatedAndOperationalRoles(UserRole? role, HttpStatusCode expected)
+    {
+        using var factory = Factory(new MemoryUsers(organizationId, adminId)); using var client = Client(factory, role);
+        Assert.Equal(expected, (await client.PutAsJsonAsync($"/api/v1/users/{Guid.NewGuid()}", UpdatePayload())).StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateRejectsSessionOrganizationChanges()
+    {
+        using var factory = Factory(new MemoryUsers(organizationId, adminId)); using var client = Client(factory, UserRole.Admin);
+        client.DefaultRequestHeaders.Add("X-Cobroup-Expected-Organization", Guid.NewGuid().ToString());
+        Assert.Equal(HttpStatusCode.Conflict, (await client.PutAsJsonAsync($"/api/v1/users/{Guid.NewGuid()}", UpdatePayload())).StatusCode);
+    }
 
     [Fact]
     public async Task CreatesInTokenTenantAndNeverReturnsPasswordOrHash()
@@ -113,8 +155,9 @@ public sealed class UserManagementHttpTests
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync("/api/v1/users", Payload())).StatusCode);
     }
 
-    private sealed class MemoryUsers(Guid organizationId, Guid adminId) : IUserManagementRepository
+    private sealed class MemoryUsers(Guid organizationId, Guid adminId) : IUserManagementRepository, IUserEditingRepository
     {
+        public OrganizationMembership? Editable { get; set; }
         public OrganizationMembership? CreatedMembership { get; private set; }
         public Task<bool> IsActiveAdminAsync(Guid organization, Guid user, CancellationToken cancellationToken) =>
             Task.FromResult(organization == organizationId && user == adminId);
@@ -125,5 +168,10 @@ public sealed class UserManagementHttpTests
             CreatedMembership = membership;
             return Task.FromResult(true);
         }
+        public Task<OrganizationMembership?> FindAsync(Guid organization, Guid user, CancellationToken cancellationToken) =>
+            Task.FromResult(Editable?.OrganizationId == organization && Editable.UserId == user ? Editable : null);
+        public Task<bool> HasOtherMembershipsAsync(Guid organization, Guid user, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<bool> HasActiveRouteAssignmentsAsync(Guid organization, Guid user, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task<bool> SaveAsync(OrganizationMembership membership, AdministrativeAuditRecord audit, bool revokeAllSessions, bool revokeTenantSessions, CancellationToken cancellationToken) => Task.FromResult(true);
     }
 }

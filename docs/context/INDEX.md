@@ -6,6 +6,8 @@ Autoridad administrativa para configuración de organización, rutas, asignacion
 
 ## Límites
 
+- Usuarios: `PUT /api/v1/users/{id}` y auditoría/revocación atómica según [decisión de edición](../../../cobroup.md/DECISION_UBICACION_CLIENTES_EDICION_USUARIOS.md). Contrato detallado en [organizaciones y usuarios v1](../contracts/organization-provisioning-users-v1.md).
+
 - Organizaciones y equipo: [aprovisionamiento privado y usuarios v1](../contracts/organization-provisioning-users-v1.md). Alta de organización con dueño por CLI; listado y creación tenant-safe de supervisores y colaboradores desde el panel.
 
 - Propio: configuración organizacional, rutas, cupos heredables, asignaciones y sus contratos de consulta/auditoría.

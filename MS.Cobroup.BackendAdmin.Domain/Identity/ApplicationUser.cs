@@ -56,6 +56,16 @@ public sealed class ApplicationUser
     public static string NormalizeUsername(string value) =>
         Require(value, nameof(value), 80).ToUpperInvariant();
 
+    public void UpdateProfile(string username, string displayName, string phoneNumber, string? passwordHash, DateTimeOffset updatedAtUtc)
+    {
+        Username = Require(username, nameof(username), 80);
+        NormalizedUsername = NormalizeUsername(username);
+        DisplayName = Require(displayName, nameof(displayName), 160);
+        PhoneNumber = Require(phoneNumber, nameof(phoneNumber), 24);
+        if (passwordHash is not null) PasswordHash = Require(passwordHash, nameof(passwordHash), 512);
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
     private static string Require(string value, string parameterName, int maximumLength)
     {
         var normalized = value?.Trim() ?? string.Empty;

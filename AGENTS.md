@@ -4,7 +4,7 @@
 
 - Producto: COBROUP
 - Rol: microservicio administrativo por tenant.
-- Documento maestro: `../cobroup.md/COBROUP.md` 1.11.0 y `../cobroup.md/DECISION_AUTENTICACION_JWT.md`.
+- Documento maestro: `../cobroup.md/COBROUP.md` 1.13.0 y `../cobroup.md/DECISION_AUTENTICACION_JWT.md`.
 - Estándar: `../cobroup.md/FRAMEWORK_DESARROLLO_CSHARP.md` 2.0.
 - Rama activa observada: `feature/organizaciones-usuarios`, creada desde `dev` por instrucción del usuario.
 - Prohibidos push, merge, tag y PR sin autorización.
@@ -473,3 +473,32 @@
 - Alcance restante: aprovisionamiento privado antes del arranque JWT/HTTP, ejecución directa desde Windows, compatibilidad PowerShell 5.1/7 y documentación.
 - Verificaciones previas registradas: build Release y pruebas HTTP/CLI y smoke del script; sin cambios funcionales adicionales en esta solicitud. git diff --check correcto.
 - Commit autorizado: SÍ. Sin push ni despliegue.
+
+### 2026-10-23 — Hashing coherente con contraseñas sin longitud mínima y diagnóstico del proceso
+
+- Solicitud: corregir salida genérica de aprovisionamiento con código 1 en Windows.
+- Hallazgo: tras la decisión explícita de permitir contraseñas sin longitud/complejidad, el script y Core ya aceptaban valores cortos, pero AspNetPasswordCredentialService aún imponía 12 caracteres. Se eliminó esa regla residual; se conserva contraseña no vacía y hash ASP.NET Identity, sin recortar contenido.
+- Script: captura y drena stdout/stderr concurrentemente con UTF-8 y muestra la causa antes del código de salida; así son visibles errores de compilación, validación o base de datos sin ventanas ocultas ni contraseña en argumentos.
+- Validación: 15/15 pruebas relevantes HTTP/CLI/hashing aprobadas, incluyendo contraseña de un carácter a través del CLI y hasher real. Seis comprobaciones con procesos simulados en PowerShell 5.1 y 7: cuatro casos de éxito y dos casos de error con stderr visible/código 1 y sin contraseña en salida. No se crearon cuentas ni se modificó la base de datos durante las pruebas. git diff --check correcto.
+- Rama feature/organizaciones-usuarios; trabajo previo confirmado por terceros preservado. Sin nuevo commit ni push.
+
+### 2026-10-23 — Commit autorizado de corrección de aprovisionamiento
+
+- Solicitud expresa: hacer commit de la corrección de hashing sin longitud mínima y diagnóstico stdout/stderr del script.
+- Alcance: servicio de credenciales, script Windows, pruebas de regresión y documentación; se conservan las 15 pruebas aprobadas y verificaciones PowerShell 5.1/7 de la intervención anterior.
+- Rama feature/organizaciones-usuarios. Commit autorizado: SÍ para este alcance. Sin push, merge, tag ni PR.
+
+### 2026-10-23 — Edición tenant-safe de usuarios
+
+- Solicitud: permitir modificar usuarios desde el panel administrativo. Maestro 1.13.0 y framework C# 2.0; puerto en Domain, caso de uso en Core, EF en Infrastructure y PUT /api/v1/users/{id} en Api.
+- Rama conservada: feature/organizaciones-usuarios, derivada de dev; árbol limpio al inicio y correcciones previas preservadas.
+- Comportamiento: actualiza username/nombre/teléfono y rol/estado de membresía; contraseña opcional conserva hash anterior. Exige Admin persistido activo, usuario objetivo del tenant y contexto consistente. Protege administrador dueño, otros administradores, identidades compartidas y asignaciones a rutas activas. Usuarios operativos solo Supervisor/Collector. Registro antes/después sin credenciales.
+- Persistencia: transacción de datos/auditoría/revocación de refresh; username/password revocan sesiones de cuenta y rol/estado del tenant. Access JWT anteriores conservan expiración. Unicidad de username se transforma en conflicto y rollback.
+- Verificación: build Release sin warnings/errores; Core 82/82 e Infrastructure/HTTP aislados 109/109. Suite filtró AuthLifecycleHttpTests y Postgres por requerir BD real. Pruebas nuevas de PostgreSQL compiladas para persistencia, revocación y rollback por duplicado, no ejecutadas localmente. EF no detecta cambios pendientes de modelo: no requiere migración nueva.
+- Limitaciones: no se alteró ningún usuario ni BD desplegada. Contrato/contexto/decisión actualizados. Auditoría independiente no realizada. Commit autorizado: NO para esta solicitud; sin push ni despliegue.
+
+### 2026-10-23 — Commit autorizado de ubicación y edición de usuarios
+
+- Solicitud expresa del propietario: hacer commits del alcance implementado de GPS/mapa de clientes y edición administrativa de usuarios, con pruebas y documentación asociadas.
+- Se conservan las verificaciones y limitaciones registradas en la intervención anterior; sin nuevos cambios funcionales.
+- Commit autorizado: SÍ para este alcance. Sin push, merge, tag, PR ni despliegue.
