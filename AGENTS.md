@@ -502,3 +502,11 @@
 - Solicitud expresa del propietario: hacer commits del alcance implementado de GPS/mapa de clientes y edición administrativa de usuarios, con pruebas y documentación asociadas.
 - Se conservan las verificaciones y limitaciones registradas en la intervención anterior; sin nuevos cambios funcionales.
 - Commit autorizado: SÍ para este alcance. Sin push, merge, tag, PR ni despliegue.
+
+### 2026-10-24 — Saldo inicial de ruta y proxy financiero administrativo
+
+- Rutas: `InitialBalance` decimal obligatorio en el contrato HTTP de creación, sin restricción de signo; rutas históricas reciben `0` mediante la migración aditiva `AddRouteInitialBalance`. El valor queda fijado al crear la ruta y se publica en listados administrativos y operativos.
+- Finanzas: proxy tenant-admin `/api/v1/route-finances` hacia el servicio operativo para balance, movimientos, altas y modificaciones sin compartir base de datos.
+- Persistencia: migración creada y modelo EF sin cambios pendientes. No se aplicó la migración ni se alteraron datos reales.
+- Verificación: build Release sin warnings/errores y Core 82/82. Infrastructure conserva 119 aprobadas y 4 fallos que requieren una `ConnectionStrings__IdentityDatabase` PostgreSQL aislada, no disponible en esta sesión.
+- Git: cambios locales sin commit, push, merge, tag, PR ni despliegue.

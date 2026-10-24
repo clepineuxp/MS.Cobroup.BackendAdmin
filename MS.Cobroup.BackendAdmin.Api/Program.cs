@@ -29,6 +29,8 @@ using MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
 using MS.Cobroup.BackendAdmin.Infrastructure.Customers;
 using MS.Cobroup.BackendAdmin.Infrastructure.LoanExceptions;
 using MS.Cobroup.BackendAdmin.Infrastructure.Loans;
+using MS.Cobroup.BackendAdmin.Core.RouteFinances;
+using MS.Cobroup.BackendAdmin.Infrastructure.RouteFinances;
 using MS.Cobroup.BackendAdmin.Infrastructure.Security;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -203,6 +205,16 @@ builder.Services.AddHttpClient<IOperationalLoanExceptionDirectory, OperationalLo
 
 builder.Services.AddScoped<LoanAdministrationService>();
 builder.Services.AddHttpClient<IOperationalLoanDirectory, OperationalLoanDirectoryClient>((services, client) =>
+{
+    var configuration = services.GetRequiredService<IConfiguration>();
+    var baseUrl = configuration["OperationalApi:BaseUrl"]
+        ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
+    client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
+    client.Timeout = TimeSpan.FromSeconds(10);
+}).AddHttpMessageHandler<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
+
+builder.Services.AddScoped<RouteFinanceAdministrationService>();
+builder.Services.AddHttpClient<IOperationalRouteFinanceDirectory, OperationalRouteFinanceDirectoryClient>((services, client) =>
 {
     var configuration = services.GetRequiredService<IConfiguration>();
     var baseUrl = configuration["OperationalApi:BaseUrl"]

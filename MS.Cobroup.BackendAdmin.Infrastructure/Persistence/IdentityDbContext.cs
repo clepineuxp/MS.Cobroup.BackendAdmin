@@ -106,6 +106,7 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.Property(item => item.MaxActiveCustomersMode).HasConversion<string>().HasMaxLength(16).IsRequired();
             entity.Property(item => item.MaxActiveLoansMode).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(item => item.InitialBalance).HasPrecision(18, 2).IsRequired();
             entity.HasIndex(item => new { item.OrganizationId, item.NormalizedName }).IsUnique();
             entity.HasOne<Organization>()
                 .WithMany()
