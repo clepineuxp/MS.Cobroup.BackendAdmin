@@ -6,7 +6,7 @@ using MS.Cobroup.BackendAdmin.Domain.Routes;
 
 namespace MS.Cobroup.BackendAdmin.Core.LoanTemplates;
 
-public sealed class LoanTemplateService(ILoanTemplateRepository repository)
+public sealed class LoanTemplateService(ILoanTemplateRepository repository, IRouteManagementRepository routes)
 {
     public async Task<LoanTemplateListResult> ListAsync(
         TenantActor actor,
@@ -19,6 +19,12 @@ public sealed class LoanTemplateService(ILoanTemplateRepository repository)
         }
 
         var templates = await repository.ListAsync(actor.OrganizationId, publishedOnly, cancellationToken);
+        if (publishedOnly)
+        {
+            var accessible = await routes.ListAccessibleAsync(actor.OrganizationId, actor.UserId, actor.Role, cancellationToken);
+            var ids = accessible.Select(route => route.Id).ToHashSet();
+            templates = templates.Where(template => template.RouteIds.Any(ids.Contains)).ToArray();
+        }
         return LoanTemplateListResult.Success(templates.Select(ToSummary).ToArray());
     }
 
@@ -51,6 +57,7 @@ public sealed class LoanTemplateService(ILoanTemplateRepository repository)
         LoanTemplate template;
         try
         {
+            await ValidateRoutesAsync(actor, input.RouteIds ?? [], cancellationToken);
             var normalizedName = LoanTemplate.NormalizeName(input.Name);
             if (await repository.NameExistsAsync(actor.OrganizationId, normalizedName, null, cancellationToken))
             {
@@ -66,9 +73,9 @@ public sealed class LoanTemplateService(ILoanTemplateRepository repository)
                 input.Status,
                 input.MaxLoanDays,
                 input.MaxPrincipalAmount,
-                input.AllowedPercentages,
+                Percentages(input),
                 actor.UserId,
-                now);
+                now, input.MinPrincipalAmount, input.RouteIds);
             var audit = AdministrativeAuditRecord.LoanTemplateCreated(
                 actor.OrganizationId,
                 actor.UserId,
@@ -105,6 +112,7 @@ public sealed class LoanTemplateService(ILoanTemplateRepository repository)
 
         try
         {
+            await ValidateRoutesAsync(actor, input.RouteIds ?? [], cancellationToken);
             var normalizedName = LoanTemplate.NormalizeName(input.Name);
             if (await repository.NameExistsAsync(actor.OrganizationId, normalizedName, templateId, cancellationToken))
             {
@@ -120,9 +128,9 @@ public sealed class LoanTemplateService(ILoanTemplateRepository repository)
                 input.Status,
                 input.MaxLoanDays,
                 input.MaxPrincipalAmount,
-                input.AllowedPercentages,
+                Percentages(input),
                 actor.UserId,
-                now);
+                now, input.MinPrincipalAmount, input.RouteIds);
             var audit = AdministrativeAuditRecord.LoanTemplateUpdated(
                 actor.OrganizationId,
                 actor.UserId,
@@ -143,6 +151,26 @@ public sealed class LoanTemplateService(ILoanTemplateRepository repository)
         }
     }
 
+    private async Task ValidateRoutesAsync(TenantActor actor, IReadOnlyCollection<Guid> routeIds, CancellationToken cancellationToken)
+    {
+        if (routeIds.Count == 0) return; // Unassigned templates are never available for origination.
+        var available = await routes.ListAccessibleAsync(actor.OrganizationId, actor.UserId, actor.Role, cancellationToken);
+        var ids = available.Select(route => route.Id).ToHashSet();
+        if (routeIds.Any(id => !ids.Contains(id)))
+            throw new ArgumentException("Selecciona rutas activas de esta organización.");
+    }
+
+    private static IReadOnlyCollection<decimal> Percentages(LoanTemplateInput input)
+    {
+        if (input.MinPercentage.HasValue || input.MaxPercentage.HasValue)
+        {
+            if (!input.MinPercentage.HasValue || !input.MaxPercentage.HasValue || input.MinPercentage > input.MaxPercentage)
+                throw new ArgumentException("El porcentaje mínimo no puede superar el máximo; ambos son obligatorios.");
+            return [input.MinPercentage.Value, input.MaxPercentage.Value];
+        }
+        return input.AllowedPercentages ?? [];
+    }
+
     private static LoanTemplateSummary ToSummary(LoanTemplate template) => new(
         template.Id,
         template.Name,
@@ -153,7 +181,7 @@ public sealed class LoanTemplateService(ILoanTemplateRepository repository)
         template.MaxLoanDays,
         template.MaxPrincipalAmount,
         template.AllowedPercentages,
-        template.UpdatedAtUtc);
+        template.UpdatedAtUtc, template.MinPrincipalAmount, template.MinPercentage, template.MaxPercentage, template.RouteIds);
 
     private static LoanTemplateDetails ToDetails(LoanTemplate template) => new(
         template.Id,
@@ -177,12 +205,16 @@ public sealed class LoanTemplateService(ILoanTemplateRepository repository)
                 version.MaxPrincipalAmount,
                 JsonSerializer.Deserialize<decimal[]>(version.AllowedPercentagesJson) ?? [],
                 version.RecordedByUserId,
-                version.RecordedAtUtc))
+                version.RecordedAtUtc,
+                version.MinPrincipalAmount,
+                (JsonSerializer.Deserialize<decimal[]>(version.AllowedPercentagesJson) ?? []).Min(),
+                (JsonSerializer.Deserialize<decimal[]>(version.AllowedPercentagesJson) ?? []).Max(),
+                JsonSerializer.Deserialize<Guid[]>(version.RouteIdsJson) ?? []))
             .ToArray(),
         template.CreatedByUserId,
         template.UpdatedByUserId,
         template.CreatedAtUtc,
-        template.UpdatedAtUtc);
+        template.UpdatedAtUtc, template.MinPrincipalAmount, template.MinPercentage, template.MaxPercentage, template.RouteIds);
 
     private static object Snapshot(LoanTemplate template) => new
     {
@@ -193,6 +225,10 @@ public sealed class LoanTemplateService(ILoanTemplateRepository repository)
         template.Version,
         template.MaxLoanDays,
         template.MaxPrincipalAmount,
-        template.AllowedPercentages
+        template.AllowedPercentages,
+        template.MinPrincipalAmount,
+        template.MinPercentage,
+        template.MaxPercentage,
+        template.RouteIds
     };
 }

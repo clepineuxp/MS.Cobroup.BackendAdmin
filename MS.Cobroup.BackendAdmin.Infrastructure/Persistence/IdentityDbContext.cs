@@ -185,8 +185,13 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.Property(item => item.Classification).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
             entity.Property(item => item.MaxPrincipalAmount).HasPrecision(18, 4);
+            entity.Property(item => item.MinPrincipalAmount).HasPrecision(18, 4);
+            entity.Property(item => item.RouteIdsJson).HasColumnType("jsonb").IsRequired();
             entity.Property(item => item.AllowedPercentagesJson).HasColumnType("jsonb").IsRequired();
             entity.Ignore(item => item.AllowedPercentages);
+            entity.Ignore(item => item.MinPercentage);
+            entity.Ignore(item => item.MaxPercentage);
+            entity.Ignore(item => item.RouteIds);
             entity.Property<uint>("xmin").IsRowVersion();
             entity.HasIndex(item => new { item.OrganizationId, item.NormalizedName }).IsUnique();
             entity.HasIndex(item => new { item.OrganizationId, item.Status, item.Classification });
@@ -218,6 +223,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.Property(item => item.Classification).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
             entity.Property(item => item.MaxPrincipalAmount).HasPrecision(18, 4);
+            entity.Property(item => item.MinPrincipalAmount).HasPrecision(18, 4);
+            entity.Property(item => item.RouteIdsJson).HasColumnType("jsonb").IsRequired();
             entity.Property(item => item.AllowedPercentagesJson).HasColumnType("jsonb").IsRequired();
             entity.HasIndex(item => new { item.LoanTemplateId, item.Version }).IsUnique();
             entity.HasOne<ApplicationUser>()

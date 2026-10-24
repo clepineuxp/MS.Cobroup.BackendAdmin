@@ -426,3 +426,18 @@
 - Cambio: contraseña obligatoria y sin recortar; eliminados mínimos, máximos y reglas de composición del alta administrativa, validación Core compartida y script privado del dueño. Hash existente conservado.
 - Verificación: Core 66/66 y frontend administrativo 46/46, con casos de alta usando `1`; build productivo Angular correcto. No se probó contra servicios desplegados ni se crearon cuentas reales.
 - Rama feature/organizaciones-usuarios; commit autorizado por el usuario; sin push ni despliegue.
+
+### 2026-10-23 — Plantillas por rangos y rutas; cuotas mensuales
+
+- Solicitud: explicar y modificar plantillas para monto/porcentaje mínimo y máximo, y listar las de la ruta al prestar. Ampliación: agregar cobros mensuales.
+- Regla: rangos continuos inclusivos, asignación explícita a rutas del tenant y validación de alcance/versión en servidor. Mensual usa meses calendario anclados al día original y conserva el cargo total pactado.
+- Datos: mínimo monetario y rutas versionados, migración aditiva AddLoanTemplateRangesAndRoutes y SQL idempotente preparado. Plantillas históricas sin asignación requieren edición; no se cambian préstamos existentes.
+- Trabajo previo de aprovisionamiento conservado. Sin commit, push ni despliegue solicitados para esta intervención. Migración no aplicada ni pruebas sobre datos reales.
+- Validación final: Core administrativo 69/69 y operativo 97/97; frontend administrativo 49/49 y operativo 53/53. Pruebas dirigidas de modelo EF 6/6 y directorio HTTP 4/4. EF sin cambios de modelo pendientes y SQL idempotente generado. No se ejecutó migración ni integración PostgreSQL desplegada.
+
+### 2026-10-23 — Commits autorizados de plantillas, mensual y mapa
+
+- Solicitud expresa: realizar los commits e incluir la actualización del mapa.
+- Alcance: rangos de crédito, asignación de plantillas a rutas, cuotas mensuales, migración y documentación; ambas interfaces incluyen la compatibilidad de importación de Leaflet del mapa.
+- Se conservan las verificaciones registradas: 278 pruebas aprobadas y compilaciones correctas. No se repitieron al no existir nuevos cambios funcionales.
+- Commit autorizado: SÍ. Sin push ni despliegue; migración administrativa pendiente de aplicación. Los ajustes anteriores de aprovisionamiento permanecen fuera de este alcance.

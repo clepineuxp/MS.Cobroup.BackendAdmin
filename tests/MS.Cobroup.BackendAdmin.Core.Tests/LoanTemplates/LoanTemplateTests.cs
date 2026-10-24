@@ -46,13 +46,17 @@ public sealed class LoanTemplateTests
             2_000_000m,
             [12.5m],
             Guid.NewGuid(),
-            DateTimeOffset.Parse("2026-10-22T12:00:00Z"));
+            DateTimeOffset.Parse("2026-10-22T12:00:00Z"), minPrincipalAmount: 500m, routeIds: [Guid.NewGuid()]);
 
         Assert.Equal(2, template.Version);
         Assert.Equal(2, template.Versions.Count);
         Assert.Equal("Credito diario", original.Name);
         Assert.Equal(30, original.MaxLoanDays);
         Assert.Equal("Credito flexible", template.Name);
+        Assert.Equal(0.01m, original.MinPrincipalAmount);
+        Assert.Equal("[]", original.RouteIdsJson);
+        Assert.Equal(500m, template.MinPrincipalAmount);
+        Assert.NotEqual(original.RouteIdsJson, template.RouteIdsJson);
     }
 
     [Theory]

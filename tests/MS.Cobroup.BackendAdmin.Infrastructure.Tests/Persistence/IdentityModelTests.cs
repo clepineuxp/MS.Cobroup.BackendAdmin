@@ -9,6 +9,22 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Tests.Persistence;
 public sealed class IdentityModelTests
 {
     [Fact]
+    public void TemplateRangesAndAssignmentsArePersistedWithHistoricalVersions()
+    {
+        using var context = new IdentityDbContext(new DbContextOptionsBuilder<IdentityDbContext>()
+            .UseNpgsql("Host=localhost;Database=model_test;Username=model_test").Options);
+        foreach (var type in new[] { typeof(MS.Cobroup.BackendAdmin.Domain.LoanTemplates.LoanTemplate),
+            typeof(MS.Cobroup.BackendAdmin.Domain.LoanTemplates.LoanTemplateVersion) })
+        {
+            var entity = context.Model.FindEntityType(type)!;
+            Assert.Equal(18, entity.FindProperty("MinPrincipalAmount")!.GetPrecision());
+            Assert.Equal(4, entity.FindProperty("MinPrincipalAmount")!.GetScale());
+            Assert.Equal("jsonb", entity.FindProperty("RouteIdsJson")!.GetColumnType());
+        }
+        Assert.Contains("MinPrincipalAmount", context.Database.GenerateCreateScript());
+    }
+
+    [Fact]
     public void OwnershipHasFilteredUniqueIndexWithoutRestrictingOrdinaryMemberships()
     {
         var options = new DbContextOptionsBuilder<IdentityDbContext>().UseNpgsql("Host=localhost;Database=model_test;Username=model_test");

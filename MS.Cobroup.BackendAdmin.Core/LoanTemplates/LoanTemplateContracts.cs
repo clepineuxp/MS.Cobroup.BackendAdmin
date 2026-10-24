@@ -9,7 +9,11 @@ public sealed record LoanTemplateInput(
     LoanTemplateStatus Status,
     int MaxLoanDays,
     decimal MaxPrincipalAmount,
-    IReadOnlyCollection<decimal> AllowedPercentages);
+    IReadOnlyCollection<decimal>? AllowedPercentages = null,
+    decimal MinPrincipalAmount = 0.01m,
+    decimal? MinPercentage = null,
+    decimal? MaxPercentage = null,
+    IReadOnlyCollection<Guid>? RouteIds = null);
 
 public sealed record LoanTemplateSummary(
     Guid Id,
@@ -21,7 +25,11 @@ public sealed record LoanTemplateSummary(
     int MaxLoanDays,
     decimal MaxPrincipalAmount,
     IReadOnlyCollection<decimal> AllowedPercentages,
-    DateTimeOffset UpdatedAtUtc);
+    DateTimeOffset UpdatedAtUtc,
+    decimal MinPrincipalAmount,
+    decimal MinPercentage,
+    decimal MaxPercentage,
+    IReadOnlyCollection<Guid> RouteIds);
 
 public sealed record LoanTemplateVersionSummary(
     int Version,
@@ -33,7 +41,11 @@ public sealed record LoanTemplateVersionSummary(
     decimal MaxPrincipalAmount,
     IReadOnlyCollection<decimal> AllowedPercentages,
     Guid RecordedByUserId,
-    DateTimeOffset RecordedAtUtc);
+    DateTimeOffset RecordedAtUtc,
+    decimal MinPrincipalAmount,
+    decimal MinPercentage,
+    decimal MaxPercentage,
+    IReadOnlyCollection<Guid> RouteIds);
 
 public sealed record LoanTemplateDetails(
     Guid Id,
@@ -49,7 +61,11 @@ public sealed record LoanTemplateDetails(
     Guid CreatedByUserId,
     Guid UpdatedByUserId,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset UpdatedAtUtc);
+    DateTimeOffset UpdatedAtUtc,
+    decimal MinPrincipalAmount,
+    decimal MinPercentage,
+    decimal MaxPercentage,
+    IReadOnlyCollection<Guid> RouteIds);
 
 public enum LoanTemplateOutcome
 {

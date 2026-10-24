@@ -20,7 +20,9 @@ public sealed class LoanTemplate
         decimal maxPrincipalAmount,
         IReadOnlyCollection<decimal> allowedPercentages,
         Guid createdByUserId,
-        DateTimeOffset createdAtUtc)
+        DateTimeOffset createdAtUtc,
+        decimal minPrincipalAmount = 0.01m,
+        IReadOnlyCollection<Guid>? routeIds = null)
     {
         if (organizationId == Guid.Empty || createdByUserId == Guid.Empty)
         {
@@ -35,8 +37,15 @@ public sealed class LoanTemplate
         Classification = ValidateClassification(classification);
         Status = ValidateStatus(status);
         MaxLoanDays = ValidateDays(maxLoanDays);
-        MaxPrincipalAmount = ValidateAmount(maxPrincipalAmount);
-        AllowedPercentagesJson = SerializePercentages(allowedPercentages);
+        var minimum = ValidateAmount(minPrincipalAmount);
+        var maximum = ValidateAmount(maxPrincipalAmount);
+        if (minimum > maximum) throw new ArgumentException("El monto mínimo no puede superar el máximo.");
+        var percentagesJson = SerializePercentages(allowedPercentages);
+        var routesJson = SerializeRoutes(routeIds ?? []);
+        MinPrincipalAmount = minimum;
+        MaxPrincipalAmount = maximum;
+        RouteIdsJson = routesJson;
+        AllowedPercentagesJson = percentagesJson;
         Version = 1;
         CreatedByUserId = createdByUserId;
         UpdatedByUserId = createdByUserId;
@@ -62,6 +71,12 @@ public sealed class LoanTemplate
     public int Version { get; private set; }
 
     public int MaxLoanDays { get; private set; }
+
+    public decimal MinPrincipalAmount { get; private set; }
+    public string RouteIdsJson { get; private set; } = "[]";
+    public IReadOnlyCollection<Guid> RouteIds => JsonSerializer.Deserialize<Guid[]>(RouteIdsJson) ?? [];
+    public decimal MinPercentage => AllowedPercentages.Min();
+    public decimal MaxPercentage => AllowedPercentages.Max();
 
     public decimal MaxPrincipalAmount { get; private set; }
 
@@ -90,7 +105,9 @@ public sealed class LoanTemplate
         decimal maxPrincipalAmount,
         IReadOnlyCollection<decimal> allowedPercentages,
         Guid createdByUserId,
-        DateTimeOffset createdAtUtc) =>
+        DateTimeOffset createdAtUtc,
+        decimal minPrincipalAmount = 0.01m,
+        IReadOnlyCollection<Guid>? routeIds = null) =>
         new(
             organizationId,
             name,
@@ -101,7 +118,7 @@ public sealed class LoanTemplate
             maxPrincipalAmount,
             allowedPercentages,
             createdByUserId,
-            createdAtUtc);
+            createdAtUtc, minPrincipalAmount, routeIds);
 
     public void Update(
         string name,
@@ -112,7 +129,9 @@ public sealed class LoanTemplate
         decimal maxPrincipalAmount,
         IReadOnlyCollection<decimal> allowedPercentages,
         Guid updatedByUserId,
-        DateTimeOffset updatedAtUtc)
+        DateTimeOffset updatedAtUtc,
+        decimal minPrincipalAmount = 0.01m,
+        IReadOnlyCollection<Guid>? routeIds = null)
     {
         if (updatedByUserId == Guid.Empty)
         {
@@ -125,8 +144,15 @@ public sealed class LoanTemplate
         Classification = ValidateClassification(classification);
         Status = ValidateStatus(status);
         MaxLoanDays = ValidateDays(maxLoanDays);
-        MaxPrincipalAmount = ValidateAmount(maxPrincipalAmount);
-        AllowedPercentagesJson = SerializePercentages(allowedPercentages);
+        var minimum = ValidateAmount(minPrincipalAmount);
+        var maximum = ValidateAmount(maxPrincipalAmount);
+        if (minimum > maximum) throw new ArgumentException("El monto mínimo no puede superar el máximo.");
+        var percentagesJson = SerializePercentages(allowedPercentages);
+        var routesJson = SerializeRoutes(routeIds ?? []);
+        MinPrincipalAmount = minimum;
+        MaxPrincipalAmount = maximum;
+        RouteIdsJson = routesJson;
+        AllowedPercentagesJson = percentagesJson;
         Version++;
         UpdatedByUserId = updatedByUserId;
         UpdatedAtUtc = updatedAtUtc;
@@ -148,7 +174,13 @@ public sealed class LoanTemplate
             MaxPrincipalAmount,
             AllowedPercentagesJson,
             actorUserId,
-            recordedAtUtc));
+            recordedAtUtc, MinPrincipalAmount, RouteIdsJson));
+
+    private static string SerializeRoutes(IReadOnlyCollection<Guid> routeIds)
+    {
+        if (routeIds.Any(id => id == Guid.Empty)) throw new ArgumentException("La ruta es inválida.");
+        return JsonSerializer.Serialize(routeIds.Distinct().Order().ToArray());
+    }
 
     private static int ValidateDays(int value) => value is > 0 and <= 3650
         ? value
