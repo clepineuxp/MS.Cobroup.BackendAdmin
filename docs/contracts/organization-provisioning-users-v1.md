@@ -4,7 +4,7 @@ Decisión autorizada el 2026-10-23: alta privada mediante comando/script; colabo
 
 ## Alta privada
 
-`--provision-organization` ejecuta un caso de uso de Core y termina sin iniciar el servidor HTTP. Recibe por stdin un JSON con `organizationCode`, `organizationName`, `username`, `displayName`, `phoneNumber` y `password`. Requiere las conexiones y configuración segura del backend administrativo del ambiente elegido. No usa ni reactiva el bootstrap inicial de una sola ejecución.
+`--provision-organization` ejecuta un caso de uso de Core y termina sin iniciar el servidor HTTP. Recibe por stdin un JSON con `organizationCode`, `organizationName`, `username`, `displayName`, `phoneNumber` y `password`. Requiere la conexión segura `ConnectionStrings:IdentityDatabase`; no depende de claves JWT ni del arranque de autenticación HTTP. No usa ni reactiva el bootstrap inicial de una sola ejecución.
 
 La transacción de EF crea una organización activa, un usuario global activo, su membresía `Admin` con `IsOwner=true` y un registro `organization.provisioned`. El código de organización y el username normalizado son únicos. Un conflicto no deja datos parciales y no modifica cuentas existentes. No se vinculan identidades existentes ni se cambian sus contraseñas mediante este flujo.
 
@@ -27,13 +27,23 @@ La migración `AddOrganizationOwnershipAndUserContact` incorpora teléfono nulla
 
 ## Ejecución
 
-Desde la raíz del repositorio, en PowerShell 7:
+Desde la raíz del repositorio, en Windows PowerShell 5.1 o PowerShell 7:
 
 ```powershell
-./scripts/provision-organization.ps1 -OrganizationCode NORTE -OrganizationName 'Organización Norte' -Username admin.norte -DisplayName 'Administrador Norte' -PhoneNumber '+573001234567' -Namespace cobroup-dev
+./scripts/provision-organization.ps1 -OrganizationCode NORTE -OrganizationName 'Organización Norte' -Username admin.norte -DisplayName 'Administrador Norte' -PhoneNumber '+573001234567'
 ```
 
-El script solicita la contraseña oculta y usa `kubectl exec -i` sobre `deployment/admin-backend` en el namespace explícito. Requiere contexto Kubernetes correcto, permisos de exec y la imagen nueva ya desplegada. Para ejecución local, omitir `-Namespace` y configurar previamente las variables seguras o User Secrets con `ASPNETCORE_ENVIRONMENT=Development`. No introducir contraseñas en argumentos, archivos JSON ni historial de comandos.
+El modo predeterminado corre desde Windows con `dotnet` local y escribe directamente en PostgreSQL mediante Core/Infrastructure. El script configura `Development` únicamente para el proceso hijo, que lee la conexión de los User Secrets del proyecto API (o la variable de conexión existente). Solicita la contraseña oculta. No necesita clúster, kubectl, API desplegada ni cambiar variables manualmente. No introducir contraseñas en argumentos, archivos JSON ni historial de comandos.
+
+El script comprueba que el ejecutable requerido esté en PATH antes de solicitar la contraseña. Si no tienes `kubectl` ni contexto Kubernetes en este equipo, puedes ejecutar el caso de uso desde el proyecto local contra la base definida en sus User Secrets:
+
+```powershell
+./scripts/provision-organization.ps1 -OrganizationCode NORTE -OrganizationName 'Organización Norte' -Username admin.norte -DisplayName 'Administrador Norte' -PhoneNumber '+573001234567'
+```
+
+Este modo utiliza `dotnet` local y la base configurada, no hace exec en Kubernetes ni necesita un endpoint HTTP. Verifica el ambiente de la conexión antes de ejecutar; no se aplica un cambio silencioso de modo si falta un ejecutable.
+
+El parámetro opcional `-Namespace cobroup-dev` se conserva para operadores con acceso al clúster y habilita explícitamente `kubectl exec -i`; no debe usarse para el alta directa desde Windows sin acceso Kubernetes.
 
 Aplicar la migración antes del rollout de la nueva API mediante el procedimiento de despliegue del ambiente. Se puede generar SQL idempotente con:
 

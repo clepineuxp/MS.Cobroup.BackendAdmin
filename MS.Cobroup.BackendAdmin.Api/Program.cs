@@ -34,6 +34,20 @@ using MS.Cobroup.BackendAdmin.Infrastructure.Security;
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("IdentityDatabase")
     ?? throw new InvalidOperationException("ConnectionStrings:IdentityDatabase is required.");
+
+// Private provisioning needs only the database and password hashing, not the HTTP/JWT host.
+if (args.Contains("--provision-organization"))
+{
+    builder.Services.AddDbContext<IdentityDbContext>(options => options.UseNpgsql(connectionString));
+    builder.Services.AddScoped<IOrganizationProvisioningRepository, EfOrganizationProvisioningRepository>();
+    builder.Services.AddScoped<ProvisionOrganizationService>();
+    builder.Services.AddScoped<IPasswordCredentialService, AspNetPasswordCredentialService>();
+    builder.Services.AddScoped<Microsoft.AspNetCore.Identity.IPasswordHasher<object>, Microsoft.AspNetCore.Identity.PasswordHasher<object>>();
+    await using var provisioningHost = builder.Build();
+    return await MS.Cobroup.BackendAdmin.Api.Provisioning.OrganizationProvisioningCli.RunAsync(
+        provisioningHost.Services, Console.In, Console.Out, Console.Error);
+}
+
 var issuer = builder.Configuration["Identity:Issuer"]
     ?? throw new InvalidOperationException("Identity:Issuer is required.");
 
@@ -143,9 +157,7 @@ builder.Services.AddScoped<IIdentityRepository, EfIdentityRepository>();
 builder.Services.AddScoped<IRouteManagementRepository, EfRouteManagementRepository>();
 builder.Services.AddScoped<IUserDirectoryRepository, EfUserDirectoryRepository>();
 builder.Services.AddScoped<IUserManagementRepository, EfUserManagementRepository>();
-builder.Services.AddScoped<IOrganizationProvisioningRepository, EfOrganizationProvisioningRepository>();
 builder.Services.AddScoped<UserManagementService>();
-builder.Services.AddScoped<ProvisionOrganizationService>();
 builder.Services.AddScoped<IOrganizationSettingsRepository, EfOrganizationSettingsRepository>();
 builder.Services.AddScoped<ILoanTemplateRepository, EfLoanTemplateRepository>();
 builder.Services.AddScoped<IPasswordCredentialService, AspNetPasswordCredentialService>();
@@ -212,11 +224,6 @@ builder.Services.AddSingleton<IAdministrativeScopeAuthorizer, AdministrativeScop
 builder.Services.AddScoped<IOperationalSessionRevocationService, OperationalSessionRevocationService>();
 
 var app = builder.Build();
-
-if (args.Contains("--provision-organization"))
-{
-    return await MS.Cobroup.BackendAdmin.Api.Provisioning.OrganizationProvisioningCli.RunAsync(app.Services, Console.In, Console.Out, Console.Error);
-}
 
 if (args.Length > 0 && (args.Contains("--revoke-kid") || args.Contains("--revoke-all")))
 {

@@ -420,12 +420,37 @@
 - La validación PostgreSQL de transacciones/concurrencia y el flujo por ingress siguen pendientes; no se ejecutaron pruebas de creación de usuarios sobre la base de desarrollo ni se crearon cuentas reales.
 - Commit autorizado: SÍ, alcance de aprovisionamiento/usuarios, migración y documentación de esta solicitud. Push, merge, tag y PR no solicitados.
 
+### 2026-10-23 — Compatibilidad del aprovisionamiento con Windows PowerShell 5.1
+
+- Solicitud: corregir el error ScriptRequiresUnmatchedPSVersion mostrado al ejecutar el script desde Windows PowerShell 5.1.22621.2506.
+- Causa: se exigía PowerShell 7 y se usaban ArgumentList/StandardInputEncoding, inexistentes en ProcessStartInfo de .NET Framework.
+- Cambios: requisito mínimo 5.1, argumentos nativos entrecomillados para .NET Framework y ArgumentList en .NET moderno; payload UTF-8 escrito directamente a stdin; limpieza del buffer de contraseña; UTF-8 BOM para conservar tildes al interpretar el script en 5.1. Documentación de versiones actualizada.
+- Validación: script completo ejecutado en PowerShell 5.1.22621.2506 y 7.6.5 con sustitutos de dotnet/kubectl; cuatro casos aprobados (local/Kubernetes en ambas versiones), verificando JSON UTF-8 con tildes, rutas con espacios y contraseña ausente de argumentos. Sin conexiones a PostgreSQL/Kubernetes ni creación de cuentas reales. git diff --check correcto.
+- Rama: feature/organizaciones-usuarios. Corrección local sin nuevo commit ni push.
+
+### 2026-10-23 — Diagnóstico previo del ejecutable de aprovisionamiento
+
+- Solicitud: resolver Win32Exception al iniciar el comando con -Namespace cobroup-dev.
+- Diagnóstico: kubectl no está disponible en PATH del equipo; dotnet.exe sí está disponible. La excepción ocurre antes de ejecutar el aprovisionamiento, sin creación de cuentas.
+- Cambios: resolver el ejecutable nativo por ruta absoluta y comprobar su disponibilidad antes de pedir contraseña. Mensaje específico para kubectl o SDK ausente; documentado modo local con ASPNETCORE_ENVIRONMENT=Development y User Secrets, sin sustituir automáticamente el destino solicitado.
+- Validación: cuatro smoke tests completos en PowerShell 5.1 y 7.6.5 con ejecutables simulados; caso de kubectl ausente confirma que no se pide contraseña; git diff --check correcto. No se invocaron servicios reales ni se crearon cuentas.
+- Rama feature/organizaciones-usuarios; cambios locales conservan la corrección anterior de compatibilidad. Sin nuevo commit ni push.
+
+### 2026-10-23 — Aprovisionamiento directo desde Windows sin acceso al clúster
+
+- Aclaración del usuario: ejecutar en Windows y crear directamente en base de datos, sin acceso Kubernetes.
+- Cambio: el modo local predeterminado establece Development solo en el proceso hijo para cargar automáticamente los User Secrets del proyecto API; no necesita configurar variables manualmente. Mantiene el uso explícito opcional de Namespace para operadores de clúster.
+- Composición CLI adelantada al arranque JWT/HTTP: solo registra conexión PostgreSQL, repositorio, caso de uso Core y hashing ASP.NET Identity. No requiere claves de firma ni API desplegada; conserva la escritura transaccional y arquitectura hexagonal.
+- Verificación: build Release correcto con 0 warnings/errores; 10/10 pruebas HTTP/CLI relevantes aprobadas. Cuatro smoke tests de script en PowerShell 5.1/7 con ejecutables simulados aprobados. Ejecutable real acepta el modo privado sin claves JWT en Production y rechaza JSON inválido sin arrancar HTTP ni consultar base. No se crearon cuentas reales durante la validación.
+- Documentación: ejemplo principal ahora local, sin Namespace ni preparación manual de ASPNETCORE_ENVIRONMENT. La conexión de desarrollo ya configurada apunta a dev_cobroup_identity; los secretos no se imprimen ni versionan.
+- Rama feature/organizaciones-usuarios; se preservaron correcciones locales anteriores. Sin nuevo commit ni push.
+
 ### 2026-10-23 — Contraseñas sin requisitos de longitud ni complejidad
 
 - Solicitud expresa: permitir contraseñas como `1` al crear usuarios.
 - Cambio: contraseña obligatoria y sin recortar; eliminados mínimos, máximos y reglas de composición del alta administrativa, validación Core compartida y script privado del dueño. Hash existente conservado.
 - Verificación: Core 66/66 y frontend administrativo 46/46, con casos de alta usando `1`; build productivo Angular correcto. No se probó contra servicios desplegados ni se crearon cuentas reales.
-- Rama feature/organizaciones-usuarios; commit autorizado por el usuario; sin push ni despliegue.
+- Rama feature/organizaciones-usuarios; cambios locales, sin commit, push ni despliegue.
 
 ### 2026-10-23 — Plantillas por rangos y rutas; cuotas mensuales
 
@@ -441,3 +466,10 @@
 - Alcance: rangos de crédito, asignación de plantillas a rutas, cuotas mensuales, migración y documentación; ambas interfaces incluyen la compatibilidad de importación de Leaflet del mapa.
 - Se conservan las verificaciones registradas: 278 pruebas aprobadas y compilaciones correctas. No se repitieron al no existir nuevos cambios funcionales.
 - Commit autorizado: SÍ. Sin push ni despliegue; migración administrativa pendiente de aplicación. Los ajustes anteriores de aprovisionamiento permanecen fuera de este alcance.
+
+### 2026-10-23 — Commit de todos los cambios pendientes
+
+- Solicitud expresa: hacer git add y commit de todo lo pendiente.
+- Alcance restante: aprovisionamiento privado antes del arranque JWT/HTTP, ejecución directa desde Windows, compatibilidad PowerShell 5.1/7 y documentación.
+- Verificaciones previas registradas: build Release y pruebas HTTP/CLI y smoke del script; sin cambios funcionales adicionales en esta solicitud. git diff --check correcto.
+- Commit autorizado: SÍ. Sin push ni despliegue.
