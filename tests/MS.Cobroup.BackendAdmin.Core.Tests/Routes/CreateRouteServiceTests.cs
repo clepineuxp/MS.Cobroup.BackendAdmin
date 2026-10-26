@@ -29,6 +29,35 @@ public sealed class CreateRouteServiceTests
     }
 
     [Fact]
+    public async Task AdminCreatesRouteWithSpecificTimeZone()
+    {
+        var repository = CreateRepository();
+        var service = new CreateRouteService(repository);
+        var command = CreateCommand() with { TimeZoneId = "America/Sao_Paulo" };
+
+        var result = await service.ExecuteAsync(command, CancellationToken.None);
+
+        Assert.Equal(CreateRouteOutcome.Created, result.Outcome);
+        Assert.Equal("America/Sao_Paulo", repository.Route?.TimeZoneId);
+        Assert.Equal("America/Sao_Paulo", repository.Route?.ResolveTimeZoneId("America/Bogota"));
+    }
+
+    [Fact]
+    public async Task RouteInheritsOrganizationTimeZoneWhenNull()
+    {
+        var repository = CreateRepository();
+        var service = new CreateRouteService(repository);
+        var command = CreateCommand() with { TimeZoneId = null };
+
+        var result = await service.ExecuteAsync(command, CancellationToken.None);
+
+        Assert.Equal(CreateRouteOutcome.Created, result.Outcome);
+        Assert.Null(repository.Route?.TimeZoneId);
+        Assert.Equal("America/Sao_Paulo", repository.Route?.ResolveTimeZoneId("America/Sao_Paulo"));
+        Assert.Equal("America/Bogota", repository.Route?.ResolveTimeZoneId(null));
+    }
+
+    [Fact]
     public async Task NonAdminCannotCreateRoute()
     {
         var repository = CreateRepository();

@@ -52,7 +52,9 @@ public sealed record RouteSummary(
     RouteLimitSummary MaxActiveLoans,
     DateTimeOffset CreatedAtUtc,
     DateTimeOffset UpdatedAtUtc,
-    decimal InitialBalance = 0m);
+    decimal InitialBalance = 0m,
+    string? TimeZoneId = null,
+    string ResolvedTimeZoneId = "America/Bogota");
 
 public sealed record UserSummary(Guid Id, string Username, string DisplayName);
 

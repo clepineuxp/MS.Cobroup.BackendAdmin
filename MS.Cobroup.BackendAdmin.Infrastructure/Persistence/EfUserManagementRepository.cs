@@ -20,7 +20,7 @@ public sealed class EfUserManagementRepository(IdentityDbContext dbContext) : IU
             .OrderBy(membership => membership.User.DisplayName).ThenBy(membership => membership.UserId)
             .Select(membership => new OrganizationUser(membership.UserId, membership.User.Username,
                 membership.User.DisplayName, membership.Role, membership.IsActive && membership.User.IsActive,
-                membership.IsOwner, membership.JoinedAtUtc, membership.User.PhoneNumber))
+                membership.IsOwner, membership.JoinedAtUtc, membership.User.PhoneNumber, membership.CanReopenDay))
             .ToArrayAsync(cancellationToken);
 
     public async Task<bool> TryCreateAsync(ApplicationUser user, OrganizationMembership membership,

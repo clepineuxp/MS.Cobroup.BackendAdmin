@@ -39,15 +39,19 @@ public sealed class UserManagementService(IUserManagementRepository repository, 
         var now = DateTimeOffset.UtcNow;
         var user = ApplicationUser.Create(input.Username, input.DisplayName, passwords.Hash(input.Password), now, input.PhoneNumber);
         var membership = OrganizationMembership.Create(user.Id, actor.OrganizationId, input.Role, now, markAsAccessed: true);
+        if (input.CanReopenDay)
+        {
+            membership.SetCanReopenDay(true);
+        }
         var audit = AdministrativeAuditRecord.UserCreated(actor.OrganizationId, actor.UserId, user.Id, now);
         var created = await repository.TryCreateAsync(user, membership, audit, cancellationToken);
         return created
-            ? new(UserManagementOutcome.Success, User: new(user.Id, user.Username, user.DisplayName, input.Role, true, false, now, user.PhoneNumber))
+            ? new(UserManagementOutcome.Success, User: new(user.Id, user.Username, user.DisplayName, input.Role, true, false, now, user.PhoneNumber, membership.CanReopenDay))
             : new(UserManagementOutcome.Conflict, Error: "El nombre de usuario no está disponible. Elige otro.");
     }
 }
 
-public sealed record CreateOrganizationUserInput(string Username, string DisplayName, string Password, UserRole Role, string PhoneNumber);
+public sealed record CreateOrganizationUserInput(string Username, string DisplayName, string Password, UserRole Role, string PhoneNumber, bool CanReopenDay = false);
 public enum UserManagementOutcome { Success, Forbidden, Invalid, Conflict }
 public sealed record UserManagementResult(UserManagementOutcome Outcome,
     IReadOnlyCollection<OrganizationUser>? Users = null, OrganizationUser? User = null, string? Error = null);

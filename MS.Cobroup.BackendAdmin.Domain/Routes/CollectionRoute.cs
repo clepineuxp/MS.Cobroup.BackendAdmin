@@ -21,7 +21,8 @@ public sealed class CollectionRoute
         int? maxActiveCustomersOverride,
         RouteSettingMode maxActiveLoansMode,
         int? maxActiveLoansOverride,
-        decimal initialBalance)
+        decimal initialBalance,
+        string? timeZoneId = null)
     {
         if (organizationId == Guid.Empty)
         {
@@ -43,6 +44,7 @@ public sealed class CollectionRoute
         Name = Require(name, nameof(name), 120);
         NormalizedName = NormalizeName(name);
         Description = NormalizeOptional(description, nameof(description), 500);
+        TimeZoneId = NormalizeOptional(timeZoneId, nameof(timeZoneId), 100);
         Status = CollectionRouteStatus.Active;
         MaxActiveCustomersMode = maxActiveCustomersMode;
         MaxActiveCustomersOverride = ValidateOverride(maxActiveCustomersMode, maxActiveCustomersOverride, nameof(maxActiveCustomersOverride));
@@ -74,6 +76,8 @@ public sealed class CollectionRoute
     public string NormalizedName { get; private set; } = string.Empty;
 
     public string? Description { get; private set; }
+
+    public string? TimeZoneId { get; private set; }
 
     public CollectionRouteStatus Status { get; private set; }
 
@@ -109,7 +113,8 @@ public sealed class CollectionRoute
         int? maxActiveCustomersOverride = null,
         RouteSettingMode maxActiveLoansMode = RouteSettingMode.Inherited,
         int? maxActiveLoansOverride = null,
-        decimal initialBalance = 0m) =>
+        decimal initialBalance = 0m,
+        string? timeZoneId = null) =>
         new(
             Guid.NewGuid(),
             organizationId,
@@ -123,7 +128,8 @@ public sealed class CollectionRoute
             maxActiveCustomersOverride,
             maxActiveLoansMode,
             maxActiveLoansOverride,
-            initialBalance);
+            initialBalance,
+            timeZoneId);
 
     public static string NormalizeName(string value) =>
         Require(value, nameof(value), 120).ToUpperInvariant();
@@ -139,7 +145,8 @@ public sealed class CollectionRoute
         RouteSettingMode maxActiveLoansMode,
         int? maxActiveLoansOverride,
         Guid updatedByUserId,
-        DateTimeOffset updatedAtUtc)
+        DateTimeOffset updatedAtUtc,
+        string? timeZoneId = null)
     {
         if (supervisorUserId == Guid.Empty || updatedByUserId == Guid.Empty)
         {
@@ -149,6 +156,7 @@ public sealed class CollectionRoute
         Name = Require(name, nameof(name), 120);
         NormalizedName = NormalizeName(name);
         Description = NormalizeOptional(description, nameof(description), 500);
+        TimeZoneId = NormalizeOptional(timeZoneId, nameof(timeZoneId), 100);
         Status = status;
         SupervisorUserId = supervisorUserId;
         MaxActiveCustomersMode = maxActiveCustomersMode;
@@ -170,6 +178,11 @@ public sealed class CollectionRoute
             collectorAssignments.Add(new RouteCollectorAssignment(Id, collectorUserId, updatedByUserId, updatedAtUtc));
         }
     }
+
+    public string ResolveTimeZoneId(string? organizationTimeZoneId) =>
+        !string.IsNullOrWhiteSpace(TimeZoneId)
+            ? TimeZoneId
+            : (!string.IsNullOrWhiteSpace(organizationTimeZoneId) ? organizationTimeZoneId : "America/Bogota");
 
     public int? ResolveMaxActiveCustomers(int? organizationValue) =>
         MaxActiveCustomersMode is RouteSettingMode.Inherited ? organizationValue : MaxActiveCustomersOverride;

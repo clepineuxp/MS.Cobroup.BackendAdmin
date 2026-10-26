@@ -57,7 +57,8 @@ public sealed class RoutesController(
                     request.MaxActiveCustomersOverride,
                     request.MaxActiveLoansMode,
                     request.MaxActiveLoansOverride,
-                    request.InitialBalance.Value),
+                    request.InitialBalance.Value,
+                    request.TimeZoneId),
                 cancellationToken);
         }
         catch (ArgumentException exception)
@@ -101,7 +102,8 @@ public sealed class RoutesController(
                     request.MaxActiveCustomersMode,
                     request.MaxActiveCustomersOverride,
                     request.MaxActiveLoansMode,
-                    request.MaxActiveLoansOverride),
+                    request.MaxActiveLoansOverride,
+                    request.TimeZoneId),
                 cancellationToken);
         }
         catch (ArgumentException exception)
@@ -131,7 +133,8 @@ public sealed record CreateRouteRequest(
     RouteSettingMode MaxActiveCustomersMode = RouteSettingMode.Inherited,
     int? MaxActiveCustomersOverride = null,
     RouteSettingMode MaxActiveLoansMode = RouteSettingMode.Inherited,
-    int? MaxActiveLoansOverride = null);
+    int? MaxActiveLoansOverride = null,
+    string? TimeZoneId = null);
 
 public sealed record UpdateRouteRequest(
     string Name,
@@ -142,4 +145,5 @@ public sealed record UpdateRouteRequest(
     RouteSettingMode MaxActiveCustomersMode,
     int? MaxActiveCustomersOverride,
     RouteSettingMode MaxActiveLoansMode,
-    int? MaxActiveLoansOverride);
+    int? MaxActiveLoansOverride,
+    string? TimeZoneId = null);

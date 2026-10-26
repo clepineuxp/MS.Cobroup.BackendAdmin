@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using MS.Cobroup.BackendAdmin.Domain.Identity;
+using MS.Cobroup.BackendAdmin.Domain.Authorization;
 using MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
 using MS.Cobroup.BackendAdmin.Domain.Interfaces.Services;
 
@@ -337,7 +338,8 @@ public sealed class JwtTokenService(
             new("role", membership.Role.ToString()),
             new("preferred_username", user.Username),
             new(ClaimTypes.Name, user.DisplayName),
-            new("user_id", user.Id.ToString())
+            new("user_id", user.Id.ToString()),
+            new("can_reopen_day", (membership.Role == UserRole.Admin || membership.CanReopenDay) ? "true" : "false")
         };
 
         var tokenDescriptor = new SecurityTokenDescriptor

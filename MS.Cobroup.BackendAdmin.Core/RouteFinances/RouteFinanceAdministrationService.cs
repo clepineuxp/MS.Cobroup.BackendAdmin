@@ -5,6 +5,7 @@ namespace MS.Cobroup.BackendAdmin.Core.RouteFinances;
 
 public interface IOperationalRouteFinanceDirectory
 {
+    Task<RouteFinanceProxyResult> ListAuditTraceAsync(string accessToken, Guid? routeId, DateTimeOffset? fromUtc, DateTimeOffset? toUtc, CancellationToken cancellationToken);
     Task<RouteFinanceProxyResult> GetBalanceAsync(string accessToken, Guid routeId, CancellationToken cancellationToken);
     Task<RouteFinanceProxyResult> ListEntriesAsync(string accessToken, Guid routeId, string section, CancellationToken cancellationToken);
     Task<RouteFinanceProxyResult> CreateEntryAsync(string accessToken, string json, CancellationToken cancellationToken);
@@ -13,6 +14,12 @@ public interface IOperationalRouteFinanceDirectory
 
 public sealed class RouteFinanceAdministrationService(IOperationalRouteFinanceDirectory directory)
 {
+    public Task<RouteFinanceProxyResult> ListAuditTraceAsync(
+        TenantActor actor, string accessToken, Guid? routeId, DateTimeOffset? fromUtc, DateTimeOffset? toUtc, CancellationToken cancellationToken) =>
+        actor.Role is UserRole.Admin
+            ? directory.ListAuditTraceAsync(accessToken, routeId, fromUtc, toUtc, cancellationToken)
+            : Task.FromResult(RouteFinanceProxyResult.Forbidden());
+
     public Task<RouteFinanceProxyResult> GetBalanceAsync(
         TenantActor actor, string accessToken, Guid routeId, CancellationToken cancellationToken) =>
         actor.Role is UserRole.Admin

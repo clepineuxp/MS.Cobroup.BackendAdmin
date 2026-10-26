@@ -59,7 +59,8 @@ public sealed class CreateRouteService(IRouteManagementRepository repository)
             command.MaxActiveCustomersOverride,
             command.MaxActiveLoansMode,
             command.MaxActiveLoansOverride,
-            command.InitialBalance);
+            command.InitialBalance,
+            command.TimeZoneId);
         var audit = AdministrativeAuditRecord.RouteCreated(
             command.Actor.OrganizationId,
             command.Actor.UserId,
@@ -85,7 +86,8 @@ public sealed record CreateRouteCommand(
     int? MaxActiveCustomersOverride = null,
     RouteSettingMode MaxActiveLoansMode = RouteSettingMode.Inherited,
     int? MaxActiveLoansOverride = null,
-    decimal InitialBalance = 0m);
+    decimal InitialBalance = 0m,
+    string? TimeZoneId = null);
 
 public enum CreateRouteOutcome
 {

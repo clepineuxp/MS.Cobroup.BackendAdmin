@@ -157,6 +157,11 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("CanReopenDay")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -567,6 +572,10 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
 
                     b.Property<Guid>("SupervisorUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTimeOffset>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");

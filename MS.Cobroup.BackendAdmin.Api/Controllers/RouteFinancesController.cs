@@ -11,6 +11,17 @@ namespace MS.Cobroup.BackendAdmin.Api.Controllers;
 [Authorize(Policy = "tenant-admin")]
 public sealed class RouteFinancesController(RouteFinanceAdministrationService service) : ControllerBase
 {
+    [HttpGet("audit-trace")]
+    public async Task<IActionResult> ListAuditTrace(
+        [FromQuery] Guid? routeId,
+        [FromQuery] DateTimeOffset? fromTimestampUtc,
+        [FromQuery] DateTimeOffset? toTimestampUtc,
+        CancellationToken cancellationToken)
+    {
+        if (!TenantActorReader.TryRead(User, out var actor)) return Unauthorized();
+        return Proxy(await service.ListAuditTraceAsync(actor, ReadBearer(), routeId, fromTimestampUtc, toTimestampUtc, cancellationToken));
+    }
+
     [HttpGet("{routeId:guid}/balance")]
     public async Task<IActionResult> GetBalance(Guid routeId, CancellationToken cancellationToken)
     {

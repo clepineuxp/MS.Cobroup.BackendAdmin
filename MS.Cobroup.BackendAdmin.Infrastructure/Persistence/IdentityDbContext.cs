@@ -66,6 +66,7 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.ToTable("organization_memberships");
             entity.HasKey(item => new { item.UserId, item.OrganizationId });
             entity.Property(item => item.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
+            entity.Property(item => item.CanReopenDay).HasDefaultValue(false).IsRequired();
             entity.HasIndex(item => new { item.UserId, item.LastAccessedAtUtc });
             entity.HasIndex(item => item.OrganizationId);
             entity.HasIndex(item => new { item.OrganizationId, item.IsOwner }).IsUnique().HasFilter("\"IsOwner\" = TRUE");
@@ -103,6 +104,7 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.Property(item => item.Name).HasMaxLength(120).IsRequired();
             entity.Property(item => item.NormalizedName).HasMaxLength(120).IsRequired();
             entity.Property(item => item.Description).HasMaxLength(500);
+            entity.Property(item => item.TimeZoneId).HasMaxLength(100);
             entity.Property(item => item.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.Property(item => item.MaxActiveCustomersMode).HasConversion<string>().HasMaxLength(16).IsRequired();
             entity.Property(item => item.MaxActiveLoansMode).HasConversion<string>().HasMaxLength(16).IsRequired();

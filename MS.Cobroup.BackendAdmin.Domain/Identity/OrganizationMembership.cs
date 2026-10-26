@@ -47,6 +47,8 @@ public sealed class OrganizationMembership
 
     public bool IsActive { get; private set; }
 
+    public bool CanReopenDay { get; private set; }
+
     public DateTimeOffset JoinedAtUtc { get; private set; }
 
     public DateTimeOffset? LastAccessedAtUtc { get; private set; }
@@ -81,12 +83,18 @@ public sealed class OrganizationMembership
         IsActive = false;
     }
 
-    public void UpdateAccess(UserRole role, bool isActive)
+    public void SetCanReopenDay(bool canReopenDay)
+    {
+        CanReopenDay = canReopenDay;
+    }
+
+    public void UpdateAccess(UserRole role, bool isActive, bool canReopenDay = false)
     {
         if (!Enum.IsDefined(role)) throw new ArgumentException("Invalid role.", nameof(role));
         if (IsOwner && (role != UserRole.Admin || !isActive))
             throw new InvalidOperationException("The organization owner must remain an active administrator.");
         Role = role;
         IsActive = isActive;
+        CanReopenDay = role == UserRole.Admin || canReopenDay;
     }
 }
