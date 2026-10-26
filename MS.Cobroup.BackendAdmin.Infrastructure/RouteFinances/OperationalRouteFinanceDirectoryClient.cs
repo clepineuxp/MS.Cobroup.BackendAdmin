@@ -6,6 +6,16 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.RouteFinances;
 
 public sealed class OperationalRouteFinanceDirectoryClient(HttpClient httpClient) : IOperationalRouteFinanceDirectory
 {
+    public Task<RouteFinanceProxyResult> ListAuditTraceAsync(
+        string accessToken, Guid? routeId, DateTimeOffset? fromUtc, DateTimeOffset? toUtc, CancellationToken cancellationToken)
+    {
+        var query = new List<string>();
+        if (routeId.HasValue) query.Add($"routeId={routeId:D}");
+        if (fromUtc.HasValue) query.Add($"fromUtc={Uri.EscapeDataString(fromUtc.Value.ToString("O"))}");
+        if (toUtc.HasValue) query.Add($"toUtc={Uri.EscapeDataString(toUtc.Value.ToString("O"))}");
+        return SendAsync(HttpMethod.Get, $"api/operations/v1/route-finances/audit-trace?{string.Join("&", query)}", accessToken, null, cancellationToken);
+    }
+
     public Task<RouteFinanceProxyResult> GetBalanceAsync(
         string accessToken, Guid routeId, CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Get, $"api/operations/v1/route-finances/{routeId:D}/balance", accessToken, null, cancellationToken);

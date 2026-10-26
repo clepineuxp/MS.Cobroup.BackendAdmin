@@ -510,3 +510,12 @@
 - Persistencia: migración creada y modelo EF sin cambios pendientes. No se aplicó la migración ni se alteraron datos reales.
 - Verificación: build Release sin warnings/errores y Core 82/82. Infrastructure conserva 119 aprobadas y 4 fallos que requieren una `ConnectionStrings__IdentityDatabase` PostgreSQL aislada, no disponible en esta sesión.
 - Git: cambios locales sin commit, push, merge, tag, PR ni despliegue.
+
+### 2026-10-26 — Corrección y validación del último cambio de Gemini
+
+- Solicitud: investigar por qué no ejecutan los backend y conservar operativa la funcionalidad nueva.
+- Hallazgos: error CS0103 UserRole en JwtTokenService; faltaban migraciones para routes.TimeZoneId y organization_memberships.CanReopenDay; el frontend administrativo consultaba audit-trace sin endpoint correspondiente.
+- Correcciones: import de Authorization; migración AddRouteTimeZoneAndDayReopeningPermission y SQL idempotente; fachada de auditoría Admin, conversión de fromTimestampUtc/toTimestampUtc a fromUtc/toUtc del servicio operativo y reenvío del bearer.
+- Validación: build correcto; Core 85/85 e Infrastructure aislada 110/110 (excluidos Postgres y AuthLifecycleHttpTests dependientes de BD real). Prueba de proxy confirma ruta, fechas, bearer y respuesta. Modelo EF sin diferencias pendientes tras recompilar.
+- Limitación: PostgreSQL de desarrollo configurado agota el tiempo de espera al consultar sesión/historial; migraciones no aplicadas ni datos reales alterados. Arranque HTTP correcto; salud completa depende de restablecer BD. Instancias Debug abiertas bloquean recompilación; verificaciones finales en Release.
+- Git: cambios existentes conservados en feature/unique-transaction. Sin commit, push ni despliegue.

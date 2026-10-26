@@ -61,6 +61,7 @@ public sealed class UpdateRouteService(IRouteManagementRepository repository)
         {
             route.Name,
             route.Description,
+            route.TimeZoneId,
             route.Status,
             route.SupervisorUserId,
             CollectorUserIds = route.CollectorAssignments.Select(item => item.CollectorUserId).Order().ToArray(),
@@ -80,11 +81,13 @@ public sealed class UpdateRouteService(IRouteManagementRepository repository)
             command.MaxActiveLoansMode,
             command.MaxActiveLoansOverride,
             command.Actor.UserId,
-            now);
+            now,
+            command.TimeZoneId);
         var current = new
         {
             route.Name,
             route.Description,
+            route.TimeZoneId,
             route.Status,
             route.SupervisorUserId,
             CollectorUserIds = route.CollectorAssignments.Select(item => item.CollectorUserId).Order().ToArray(),
@@ -118,7 +121,8 @@ public sealed record UpdateRouteCommand(
     RouteSettingMode MaxActiveCustomersMode,
     int? MaxActiveCustomersOverride,
     RouteSettingMode MaxActiveLoansMode,
-    int? MaxActiveLoansOverride);
+    int? MaxActiveLoansOverride,
+    string? TimeZoneId = null);
 
 public enum UpdateRouteOutcome
 {

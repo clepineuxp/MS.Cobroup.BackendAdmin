@@ -13,4 +13,4 @@ public interface IUserManagementRepository
 }
 
 public sealed record OrganizationUser(Guid Id, string Username, string DisplayName, UserRole Role,
-    bool IsActive, bool IsOwner, DateTimeOffset JoinedAtUtc, string? PhoneNumber);
+    bool IsActive, bool IsOwner, DateTimeOffset JoinedAtUtc, string? PhoneNumber, bool CanReopenDay = false);

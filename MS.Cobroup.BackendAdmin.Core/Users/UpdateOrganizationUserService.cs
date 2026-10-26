@@ -40,19 +40,19 @@ public sealed class UpdateOrganizationUserService(IUserManagementRepository user
             && await repository.HasActiveRouteAssignmentsAsync(actor.OrganizationId, userId, cancellationToken))
             return new(UserUpdateOutcome.Conflict, Error: "Reasigna primero las rutas activas del usuario antes de cambiar su rol o estado.");
 
-        var before = new { user.Username, user.DisplayName, user.PhoneNumber, membership.Role, membership.IsActive };
+        var before = new { user.Username, user.DisplayName, user.PhoneNumber, membership.Role, membership.IsActive, membership.CanReopenDay };
         var now = DateTimeOffset.UtcNow;
         user.UpdateProfile(input.Username, input.DisplayName, input.PhoneNumber, passwordChanged ? passwords.Hash(input.Password!) : null, now);
-        membership.UpdateAccess(input.Role, input.IsActive);
-        var details = JsonSerializer.Serialize(new { before, after = new { user.Username, user.DisplayName, user.PhoneNumber, membership.Role, membership.IsActive }, passwordChanged });
+        membership.UpdateAccess(input.Role, input.IsActive, input.CanReopenDay);
+        var details = JsonSerializer.Serialize(new { before, after = new { user.Username, user.DisplayName, user.PhoneNumber, membership.Role, membership.IsActive, membership.CanReopenDay }, passwordChanged });
         var audit = AdministrativeAuditRecord.UserUpdated(actor.OrganizationId, actor.UserId, userId, now, details);
         var saved = await repository.SaveAsync(membership, audit, passwordChanged || before.Username != user.Username, accessChanged, cancellationToken);
         return saved
-            ? new(UserUpdateOutcome.Success, new(user.Id, user.Username, user.DisplayName, membership.Role, membership.IsActive, membership.IsOwner, membership.JoinedAtUtc, user.PhoneNumber))
+            ? new(UserUpdateOutcome.Success, new(user.Id, user.Username, user.DisplayName, membership.Role, membership.IsActive, membership.IsOwner, membership.JoinedAtUtc, user.PhoneNumber, membership.CanReopenDay))
             : new(UserUpdateOutcome.Conflict, Error: "El nombre de usuario no está disponible. Elige otro.");
     }
 }
 
-public sealed record UpdateOrganizationUserInput(string Username, string DisplayName, string PhoneNumber, UserRole Role, bool IsActive, string? Password = null);
+public sealed record UpdateOrganizationUserInput(string Username, string DisplayName, string PhoneNumber, UserRole Role, bool IsActive, string? Password = null, bool CanReopenDay = false);
 public enum UserUpdateOutcome { Success, Forbidden, NotFound, Invalid, Conflict }
 public sealed record UpdateOrganizationUserResult(UserUpdateOutcome Outcome, OrganizationUser? User = null, string? Error = null);

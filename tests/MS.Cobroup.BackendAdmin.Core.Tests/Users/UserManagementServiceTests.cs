@@ -33,6 +33,17 @@ public sealed class UserManagementServiceTests
         Assert.DoesNotContain(Input().Password, repository.Audit.DetailsJson ?? "");
     }
 
+    [Fact]
+    public async Task SupervisorCanBeCreatedWithCanReopenDayPermission()
+    {
+        var input = new CreateOrganizationUserInput("supervisor.uno", "Super Uno", "secret123", UserRole.Supervisor, "+57 300 9998877", CanReopenDay: true);
+        var result = await new UserManagementService(repository, passwords).CreateAsync(admin, input, default);
+
+        Assert.Equal(UserManagementOutcome.Success, result.Outcome);
+        Assert.True(repository.Membership!.CanReopenDay);
+        Assert.True(result.User!.CanReopenDay);
+    }
+
     [Theory]
     [InlineData(UserRole.Supervisor)]
     [InlineData(UserRole.Collector)]
