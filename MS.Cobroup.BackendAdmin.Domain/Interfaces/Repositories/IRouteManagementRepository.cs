@@ -51,7 +51,8 @@ public sealed record RouteSummary(
     RouteLimitSummary MaxActiveCustomers,
     RouteLimitSummary MaxActiveLoans,
     DateTimeOffset CreatedAtUtc,
-    DateTimeOffset UpdatedAtUtc);
+    DateTimeOffset UpdatedAtUtc,
+    decimal InitialBalance = 0m);
 
 public sealed record UserSummary(Guid Id, string Username, string DisplayName);
 
@@ -63,4 +64,6 @@ public sealed record AccessibleRouteSummary(
     string? Description,
     string AccessAs,
     int? MaxActiveCustomers,
-    int? MaxActiveLoans);
+    int? MaxActiveLoans,
+    decimal InitialBalance = 0m,
+    string TimeZoneId = "America/Bogota");

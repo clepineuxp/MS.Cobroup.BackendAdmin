@@ -54,7 +54,8 @@ public sealed class EfRouteManagementRepository(IdentityDbContext dbContext) : I
                     route.MaxActiveLoansOverride,
                     route.ResolveMaxActiveLoans(settings?.MaxActiveLoansPerRoute)),
                 route.CreatedAtUtc,
-                route.UpdatedAtUtc))
+                route.UpdatedAtUtc,
+                route.InitialBalance))
             .ToArray();
     }
 
@@ -172,7 +173,9 @@ public sealed class EfRouteManagementRepository(IdentityDbContext dbContext) : I
                 route.Description,
                 role.ToString(),
                 route.ResolveMaxActiveCustomers(settings?.MaxActiveCustomersPerRoute),
-                route.ResolveMaxActiveLoans(settings?.MaxActiveLoansPerRoute)))
+                route.ResolveMaxActiveLoans(settings?.MaxActiveLoansPerRoute),
+                route.InitialBalance,
+                settings?.TimeZoneId ?? "America/Bogota"))
             .ToArray();
     }
 }

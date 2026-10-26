@@ -58,7 +58,8 @@ public sealed class CreateRouteService(IRouteManagementRepository repository)
             command.MaxActiveCustomersMode,
             command.MaxActiveCustomersOverride,
             command.MaxActiveLoansMode,
-            command.MaxActiveLoansOverride);
+            command.MaxActiveLoansOverride,
+            command.InitialBalance);
         var audit = AdministrativeAuditRecord.RouteCreated(
             command.Actor.OrganizationId,
             command.Actor.UserId,
@@ -83,7 +84,8 @@ public sealed record CreateRouteCommand(
     RouteSettingMode MaxActiveCustomersMode = RouteSettingMode.Inherited,
     int? MaxActiveCustomersOverride = null,
     RouteSettingMode MaxActiveLoansMode = RouteSettingMode.Inherited,
-    int? MaxActiveLoansOverride = null);
+    int? MaxActiveLoansOverride = null,
+    decimal InitialBalance = 0m);
 
 public enum CreateRouteOutcome
 {

@@ -527,6 +527,10 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<decimal>("InitialBalance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<string>("MaxActiveCustomersMode")
                         .IsRequired()
                         .HasMaxLength(16)

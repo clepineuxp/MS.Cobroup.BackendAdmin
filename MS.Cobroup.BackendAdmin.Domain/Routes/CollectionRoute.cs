@@ -20,7 +20,8 @@ public sealed class CollectionRoute
         RouteSettingMode maxActiveCustomersMode,
         int? maxActiveCustomersOverride,
         RouteSettingMode maxActiveLoansMode,
-        int? maxActiveLoansOverride)
+        int? maxActiveLoansOverride,
+        decimal initialBalance)
     {
         if (organizationId == Guid.Empty)
         {
@@ -47,6 +48,7 @@ public sealed class CollectionRoute
         MaxActiveCustomersOverride = ValidateOverride(maxActiveCustomersMode, maxActiveCustomersOverride, nameof(maxActiveCustomersOverride));
         MaxActiveLoansMode = maxActiveLoansMode;
         MaxActiveLoansOverride = ValidateOverride(maxActiveLoansMode, maxActiveLoansOverride, nameof(maxActiveLoansOverride));
+        InitialBalance = initialBalance;
         SupervisorUserId = supervisorUserId;
         CreatedByUserId = createdByUserId;
         CreatedAtUtc = createdAtUtc;
@@ -87,6 +89,8 @@ public sealed class CollectionRoute
 
     public int? MaxActiveLoansOverride { get; private set; }
 
+    public decimal InitialBalance { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
     public DateTimeOffset UpdatedAtUtc { get; private set; }
@@ -104,7 +108,8 @@ public sealed class CollectionRoute
         RouteSettingMode maxActiveCustomersMode = RouteSettingMode.Inherited,
         int? maxActiveCustomersOverride = null,
         RouteSettingMode maxActiveLoansMode = RouteSettingMode.Inherited,
-        int? maxActiveLoansOverride = null) =>
+        int? maxActiveLoansOverride = null,
+        decimal initialBalance = 0m) =>
         new(
             Guid.NewGuid(),
             organizationId,
@@ -117,7 +122,8 @@ public sealed class CollectionRoute
             maxActiveCustomersMode,
             maxActiveCustomersOverride,
             maxActiveLoansMode,
-            maxActiveLoansOverride);
+            maxActiveLoansOverride,
+            initialBalance);
 
     public static string NormalizeName(string value) =>
         Require(value, nameof(value), 120).ToUpperInvariant();

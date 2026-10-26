@@ -38,6 +38,11 @@ public sealed class RoutesController(
             return Unauthorized();
         }
 
+        if (!request.InitialBalance.HasValue)
+        {
+            return BadRequest(new { message = "El saldo inicial de la ruta es obligatorio." });
+        }
+
         CreateRouteResult result;
         try
         {
@@ -51,7 +56,8 @@ public sealed class RoutesController(
                     request.MaxActiveCustomersMode,
                     request.MaxActiveCustomersOverride,
                     request.MaxActiveLoansMode,
-                    request.MaxActiveLoansOverride),
+                    request.MaxActiveLoansOverride,
+                    request.InitialBalance.Value),
                 cancellationToken);
         }
         catch (ArgumentException exception)
@@ -121,6 +127,7 @@ public sealed record CreateRouteRequest(
     string? Description,
     Guid SupervisorUserId,
     IReadOnlyCollection<Guid>? CollectorUserIds,
+    decimal? InitialBalance,
     RouteSettingMode MaxActiveCustomersMode = RouteSettingMode.Inherited,
     int? MaxActiveCustomersOverride = null,
     RouteSettingMode MaxActiveLoansMode = RouteSettingMode.Inherited,

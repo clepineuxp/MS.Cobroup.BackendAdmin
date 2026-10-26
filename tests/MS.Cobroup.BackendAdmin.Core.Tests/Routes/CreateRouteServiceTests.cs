@@ -22,6 +22,7 @@ public sealed class CreateRouteServiceTests
         Assert.Equal(CreateRouteOutcome.Created, result.Outcome);
         Assert.Equal(organizationId, repository.Route?.OrganizationId);
         Assert.Equal(supervisorId, repository.Route?.SupervisorUserId);
+        Assert.Equal(1_250m, repository.Route?.InitialBalance);
         Assert.Equal([collectorId], repository.Route?.CollectorAssignments.Select(item => item.CollectorUserId));
         Assert.Equal(repository.Route?.Id, repository.Audit?.EntityId);
         Assert.Equal(organizationId, repository.Audit?.OrganizationId);
@@ -82,7 +83,8 @@ public sealed class CreateRouteServiceTests
         " Centro ",
         "Ruta principal",
         supervisorId,
-        [collectorId]);
+        [collectorId],
+        InitialBalance: 1_250m);
 
     private sealed class MemoryRouteRepository : IRouteManagementRepository
     {
