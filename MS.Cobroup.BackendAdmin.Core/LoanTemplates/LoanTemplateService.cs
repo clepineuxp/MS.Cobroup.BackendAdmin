@@ -164,8 +164,12 @@ public sealed class LoanTemplateService(ILoanTemplateRepository repository, IRou
     {
         if (input.MinPercentage.HasValue || input.MaxPercentage.HasValue)
         {
-            if (!input.MinPercentage.HasValue || !input.MaxPercentage.HasValue || input.MinPercentage > input.MaxPercentage)
-                throw new ArgumentException("El porcentaje mínimo no puede superar el máximo; ambos son obligatorios.");
+            if (!input.MinPercentage.HasValue || !input.MaxPercentage.HasValue)
+                throw new ArgumentException("Los porcentajes mínimo y máximo son obligatorios.");
+            if (input.MinPercentage.Value < 0 || input.MaxPercentage.Value < 0)
+                throw new ArgumentException("Los porcentajes de interés no pueden ser negativos.");
+            if (input.MinPercentage.Value > input.MaxPercentage.Value)
+                throw new ArgumentException("El porcentaje mínimo no puede superar el máximo.");
             return [input.MinPercentage.Value, input.MaxPercentage.Value];
         }
         return input.AllowedPercentages ?? [];

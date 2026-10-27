@@ -83,6 +83,42 @@ public sealed class LoanTemplateTests
             DateTimeOffset.UtcNow));
     }
 
+    [Fact]
+    public void CreateAllowsZeroPercentInterest()
+    {
+        var template = LoanTemplate.Create(
+            Guid.NewGuid(),
+            "Credito 0 porciento",
+            null,
+            LoanTemplateClassification.Low,
+            LoanTemplateStatus.Published,
+            30,
+            1_000m,
+            [0m, 5m],
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow);
+
+        Assert.Equal([0m, 5m], template.AllowedPercentages);
+        Assert.Equal(0m, template.MinPercentage);
+        Assert.Equal(5m, template.MaxPercentage);
+    }
+
+    [Fact]
+    public void CreateRejectsNegativePercentages()
+    {
+        Assert.Throws<ArgumentException>(() => LoanTemplate.Create(
+            Guid.NewGuid(),
+            "Credito invalido",
+            null,
+            LoanTemplateClassification.Low,
+            LoanTemplateStatus.Draft,
+            30,
+            1_000m,
+            [-1m, 5m],
+            Guid.NewGuid(),
+            DateTimeOffset.UtcNow));
+    }
+
     private static LoanTemplate CreateTemplate(int days = 30) => LoanTemplate.Create(
         Guid.NewGuid(),
         "Credito diario",
