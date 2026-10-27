@@ -195,9 +195,9 @@ public sealed class LoanTemplate
         ArgumentNullException.ThrowIfNull(values);
         var normalized = values.Distinct().Order().ToArray();
         if (normalized.Length is < 1 or > 20
-            || normalized.Any(value => value <= 0 || value >= 100000m || GetScale(value) > 4))
+            || normalized.Any(value => value < 0 || value >= 100000m || GetScale(value) > 4))
         {
-            throw new ArgumentException("Between 1 and 20 positive percentages are required.", nameof(values));
+            throw new ArgumentException("Between 1 and 20 non-negative percentages are required.", nameof(values));
         }
 
         return JsonSerializer.Serialize(normalized);
