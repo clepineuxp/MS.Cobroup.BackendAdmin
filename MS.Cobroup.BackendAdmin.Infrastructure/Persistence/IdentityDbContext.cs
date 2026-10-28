@@ -287,6 +287,7 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.ToTable("machine_authorization_requests"); entity.HasKey(x => x.Id);
             entity.Property(x => x.MachineId).HasMaxLength(128).IsRequired();
             entity.Property(x => x.OtpHash).HasMaxLength(64).IsRequired();
+            entity.Property(x => x.ProtectedOtp).HasMaxLength(512);
             entity.HasIndex(x => new { x.OrganizationId, x.ExpiresAtUtc });
         });
     }

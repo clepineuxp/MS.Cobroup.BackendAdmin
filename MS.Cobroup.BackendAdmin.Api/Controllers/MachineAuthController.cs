@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MS.Cobroup.BackendAdmin.Api.Security;
 using MS.Cobroup.BackendAdmin.Core.MachineAuth;
+using MS.Cobroup.BackendAdmin.Domain.Authorization;
 
 namespace MS.Cobroup.BackendAdmin.Api.Controllers;
 
@@ -16,7 +17,7 @@ public sealed class MachineAuthController(MachineAuthorizationService service) :
         try
         {
             var result = await service.RequestOtpAsync(actor, request.RouteId, request.MachineId, request.Regenerate, ct);
-            return result.Success ? Ok(new { requestId = result.RequestId, otp = result.Otp, expiresAtUtc = result.ExpiresAtUtc, reused = result.Reused }) : Forbid();
+            return result.Success ? Ok(new { requestId = result.RequestId, otp = result.Otp, createdAtUtc = result.CreatedAtUtc, expiresAtUtc = result.ExpiresAtUtc, reused = result.Reused }) : Forbid();
         }
         catch (ArgumentException exception) { return BadRequest(new { message = exception.Message }); }
     }
@@ -34,8 +35,12 @@ public sealed class MachineAuthController(MachineAuthorizationService service) :
     { return TenantActorReader.TryRead(User, out var actor) ? Ok(await service.ListPendingAsync(actor, routeId, ct)) : Unauthorized(); }
 
     [HttpGet("authorizations")][Authorize(Policy = "tenant-admin")]
-    public async Task<IActionResult> Authorizations([FromQuery] Guid routeId, CancellationToken ct)
-    { return TenantActorReader.TryRead(User, out var actor) ? Ok(await service.ListAsync(actor, routeId, ct)) : Unauthorized(); }
+    public async Task<IActionResult> Authorizations([FromQuery] Guid? routeId, [FromQuery] UserRole? role, [FromQuery] Guid? userId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken ct = default)
+    { return TenantActorReader.TryRead(User, out var actor) ? Ok(await service.ListAsync(actor, routeId, role, userId, page, pageSize, ct)) : Unauthorized(); }
+
+    [HttpPost("pending/{requestId:guid}/cancel")][Authorize(Policy = "tenant-admin")]
+    public async Task<IActionResult> CancelPending(Guid requestId, CancellationToken ct)
+    { if (!TenantActorReader.TryRead(User, out var actor)) return Unauthorized(); return await service.CancelPendingAsync(actor, requestId, ct) ? NoContent() : NotFound(); }
 
     [HttpPost("approve")][Authorize(Policy = "tenant-admin")]
     public async Task<IActionResult> Approve(ApproveMachineAuthRequest request, CancellationToken ct)
