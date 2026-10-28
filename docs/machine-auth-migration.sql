@@ -1037,3 +1037,28 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261028160135_CancelMachineAuthorizationRequest') THEN
+    ALTER TABLE machine_authorization_requests ADD "CancelledAtUtc" timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261028160135_CancelMachineAuthorizationRequest') THEN
+    ALTER TABLE machine_authorization_requests ADD "CancelledByUserId" uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261028160135_CancelMachineAuthorizationRequest') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261028160135_CancelMachineAuthorizationRequest', '10.0.11');
+    END IF;
+END $EF$;
+COMMIT;
+

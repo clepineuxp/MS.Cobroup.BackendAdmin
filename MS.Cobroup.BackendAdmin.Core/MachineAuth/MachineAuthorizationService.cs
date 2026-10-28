@@ -9,15 +9,21 @@ namespace MS.Cobroup.BackendAdmin.Core.MachineAuth;
 
 public sealed class MachineAuthorizationService(IMachineAuthorizationRepository repository, IRouteManagementRepository routes, IUserManagementRepository users)
 {
-    public async Task<OtpRequestResult> RequestOtpAsync(TenantActor actor, Guid routeId, string machineId, CancellationToken cancellationToken)
+    public async Task<OtpRequestResult> RequestOtpAsync(TenantActor actor, Guid routeId, string machineId, bool regenerate, CancellationToken cancellationToken)
     {
         if (actor.Role is UserRole.Admin || routeId == Guid.Empty) return OtpRequestResult.Forbidden();
+        if (string.IsNullOrWhiteSpace(machineId)) throw new ArgumentException("La máquina es obligatoria.", nameof(machineId));
         var accessible = await routes.ListAccessibleAsync(actor.OrganizationId, actor.UserId, actor.Role, cancellationToken);
         if (accessible.All(x => x.Id != routeId)) return OtpRequestResult.Forbidden();
-        var now = DateTimeOffset.UtcNow; var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-        var request = new MachineAuthorizationRequest(actor.OrganizationId, routeId, actor.UserId, machineId.Trim(), Hash(otp), now, now.AddMinutes(120));
+        var now = DateTimeOffset.UtcNow;
+        var normalizedMachineId = machineId.Trim();
+        var current = await repository.FindPendingAsync(actor.OrganizationId, routeId, actor.UserId, normalizedMachineId, now, cancellationToken);
+        if (current is not null && !regenerate) return OtpRequestResult.Existing(current.Id, current.ExpiresAtUtc);
+        current?.Cancel(actor.UserId, now);
+        var otp = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+        var request = new MachineAuthorizationRequest(actor.OrganizationId, routeId, actor.UserId, normalizedMachineId, Hash(otp), now, now.AddMinutes(120));
         await repository.AddRequestAsync(request, cancellationToken); await repository.SaveChangesAsync(cancellationToken);
-        return new OtpRequestResult(true, request.Id, otp, request.ExpiresAtUtc, null);
+        return OtpRequestResult.Created(request.Id, otp, request.ExpiresAtUtc);
     }
 
     public async Task<MachineAuthorizationCheckResult> CheckAsync(Guid organizationId, Guid routeId, Guid userId, string machineId, CancellationToken cancellationToken)
@@ -62,8 +68,12 @@ public sealed class MachineAuthorizationService(IMachineAuthorizationRepository 
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }
 
-public sealed record OtpRequestResult(bool Success, Guid? RequestId, string? Otp, DateTimeOffset? ExpiresAtUtc, string? Error)
-{ public static OtpRequestResult Forbidden() => new(false, null, null, null, "No autorizado."); }
+public sealed record OtpRequestResult(bool Success, Guid? RequestId, string? Otp, DateTimeOffset? ExpiresAtUtc, string? Error, bool Reused)
+{
+    public static OtpRequestResult Forbidden() => new(false, null, null, null, "No autorizado.", false);
+    public static OtpRequestResult Created(Guid requestId, string otp, DateTimeOffset expiresAtUtc) => new(true, requestId, otp, expiresAtUtc, null, false);
+    public static OtpRequestResult Existing(Guid requestId, DateTimeOffset expiresAtUtc) => new(true, requestId, null, expiresAtUtc, null, true);
+}
 public sealed record MachineAuthorizationCheckResult(bool Allowed, DateTimeOffset? AuthorizedUntilUtc, bool Indefinite)
 { public static MachineAuthorizationCheckResult Denied() => new(false, null, false); public static MachineAuthorizationCheckResult Grant(DateTimeOffset? until, bool indefinite) => new(true, until, indefinite); }
 public sealed record PendingOtpDetails(Guid RequestId, Guid RouteId, Guid UserId, string? UserDisplayName, string MachineId, DateTimeOffset CreatedAtUtc, DateTimeOffset ExpiresAtUtc);
