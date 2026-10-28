@@ -1062,3 +1062,21 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261028162109_MachineAuthorizationOtpSecret') THEN
+    ALTER TABLE machine_authorization_requests ADD "ProtectedOtp" character varying(512);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261028162109_MachineAuthorizationOtpSecret') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261028162109_MachineAuthorizationOtpSecret', '10.0.11');
+    END IF;
+END $EF$;
+COMMIT;
+

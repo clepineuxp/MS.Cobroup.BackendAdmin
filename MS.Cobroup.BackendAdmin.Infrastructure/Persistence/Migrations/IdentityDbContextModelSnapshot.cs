@@ -518,6 +518,10 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("ProtectedOtp")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
                     b.Property<Guid>("RouteId")
                         .HasColumnType("uuid");
 

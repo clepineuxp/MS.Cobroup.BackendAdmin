@@ -62,6 +62,7 @@ builder.Services.AddHealthChecks()
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
         options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddDataProtection();
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("tenant-admin", policy =>
@@ -186,6 +187,7 @@ builder.Services.AddScoped<LoanExceptionAdministrationService>();
 builder.Services.AddScoped<IPaymentMethodRepository, EfPaymentMethodRepository>();
 builder.Services.AddScoped<PaymentMethodService>();
 builder.Services.AddScoped<IMachineAuthorizationRepository, EfMachineAuthorizationRepository>();
+builder.Services.AddSingleton<IMachineOtpProtector, DataProtectionMachineOtpProtector>();
 builder.Services.AddScoped<MachineAuthorizationService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();

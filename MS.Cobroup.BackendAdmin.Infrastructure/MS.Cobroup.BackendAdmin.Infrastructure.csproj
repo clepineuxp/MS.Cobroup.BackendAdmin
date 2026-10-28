@@ -1,6 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MS.Cobroup.BackendAdmin.Core\MS.Cobroup.BackendAdmin.Core.csproj" />
     <ProjectReference Include="..\MS.Cobroup.BackendAdmin.Domain\MS.Cobroup.BackendAdmin.Domain.csproj" />
     <ProjectReference Include="..\MS.Cobroup.BackendAdmin.Shared\MS.Cobroup.BackendAdmin.Shared.csproj" />
@@ -13,7 +17,6 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.13" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
 
