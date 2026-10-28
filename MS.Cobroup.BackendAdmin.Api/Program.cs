@@ -24,6 +24,7 @@ using MS.Cobroup.BackendAdmin.Core.Services;
 using MS.Cobroup.BackendAdmin.Core.Users;
 using MS.Cobroup.BackendAdmin.Domain.Authorization;
 using MS.Cobroup.BackendAdmin.Domain.Interfaces.Services;
+using MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories;
 using MS.Cobroup.BackendAdmin.Infrastructure.Agenda;
 using MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
 using MS.Cobroup.BackendAdmin.Infrastructure.Customers;
@@ -32,6 +33,8 @@ using MS.Cobroup.BackendAdmin.Infrastructure.Loans;
 using MS.Cobroup.BackendAdmin.Core.RouteFinances;
 using MS.Cobroup.BackendAdmin.Infrastructure.RouteFinances;
 using MS.Cobroup.BackendAdmin.Infrastructure.Security;
+using MS.Cobroup.BackendAdmin.Infrastructure.MachineAuth;
+using MS.Cobroup.BackendAdmin.Core.MachineAuth;
 
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("IdentityDatabase")
@@ -182,6 +185,8 @@ builder.Services.AddScoped<ILoanExceptionAuditRepository, EfLoanExceptionAuditRe
 builder.Services.AddScoped<LoanExceptionAdministrationService>();
 builder.Services.AddScoped<IPaymentMethodRepository, EfPaymentMethodRepository>();
 builder.Services.AddScoped<PaymentMethodService>();
+builder.Services.AddScoped<IMachineAuthorizationRepository, EfMachineAuthorizationRepository>();
+builder.Services.AddScoped<MachineAuthorizationService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
 

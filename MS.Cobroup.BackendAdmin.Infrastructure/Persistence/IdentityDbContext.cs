@@ -4,6 +4,7 @@ using MS.Cobroup.BackendAdmin.Domain.Routes;
 using MS.Cobroup.BackendAdmin.Domain.Configuration;
 using MS.Cobroup.BackendAdmin.Domain.LoanTemplates;
 using MS.Cobroup.BackendAdmin.Domain.PaymentMethods;
+using MS.Cobroup.BackendAdmin.Domain.MachineAuth;
 
 namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence;
 
@@ -34,6 +35,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
     public DbSet<PaymentMethod> PaymentMethods => Set<PaymentMethod>();
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<MachineAuthorization> MachineAuthorizations => Set<MachineAuthorization>();
+    public DbSet<MachineAuthorizationRequest> MachineAuthorizationRequests => Set<MachineAuthorizationRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -270,6 +273,21 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
                 .WithMany()
                 .HasForeignKey(item => item.OrganizationId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<MachineAuthorization>(entity =>
+        {
+            entity.ToTable("machine_authorizations"); entity.HasKey(x => x.Id);
+            entity.Property(x => x.MachineId).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.HasIndex(x => new { x.OrganizationId, x.RouteId, x.UserId, x.MachineId, x.Status });
+        });
+        modelBuilder.Entity<MachineAuthorizationRequest>(entity =>
+        {
+            entity.ToTable("machine_authorization_requests"); entity.HasKey(x => x.Id);
+            entity.Property(x => x.MachineId).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.OtpHash).HasMaxLength(64).IsRequired();
+            entity.HasIndex(x => new { x.OrganizationId, x.ExpiresAtUtc });
         });
     }
 }
