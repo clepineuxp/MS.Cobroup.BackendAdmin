@@ -16,7 +16,11 @@ public sealed class MachineAuthorizationRequest
     public DateTimeOffset ExpiresAtUtc { get; private set; }
     public DateTimeOffset? ApprovedAtUtc { get; private set; }
     public Guid? ApprovedByUserId { get; private set; }
+    public DateTimeOffset? CancelledAtUtc { get; private set; }
+    public Guid? CancelledByUserId { get; private set; }
     public bool IsConsumed => ApprovedAtUtc.HasValue;
-    public bool IsValid(DateTimeOffset now) => !IsConsumed && ExpiresAtUtc > now;
+    public bool IsCancelled => CancelledAtUtc.HasValue;
+    public bool IsValid(DateTimeOffset now) => !IsConsumed && !IsCancelled && ExpiresAtUtc > now;
     public void Approve(Guid actorUserId, DateTimeOffset now) { ApprovedAtUtc = now; ApprovedByUserId = actorUserId; }
+    public void Cancel(Guid actorUserId, DateTimeOffset now) { CancelledAtUtc = now; CancelledByUserId = actorUserId; }
 }

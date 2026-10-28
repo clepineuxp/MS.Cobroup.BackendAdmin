@@ -15,8 +15,8 @@ public sealed class MachineAuthController(MachineAuthorizationService service) :
         if (!TenantActorReader.TryRead(User, out var actor)) return Unauthorized();
         try
         {
-            var result = await service.RequestOtpAsync(actor, request.RouteId, request.MachineId, ct);
-            return result.Success ? Ok(new { requestId = result.RequestId, otp = result.Otp, expiresAtUtc = result.ExpiresAtUtc }) : Forbid();
+            var result = await service.RequestOtpAsync(actor, request.RouteId, request.MachineId, request.Regenerate, ct);
+            return result.Success ? Ok(new { requestId = result.RequestId, otp = result.Otp, expiresAtUtc = result.ExpiresAtUtc, reused = result.Reused }) : Forbid();
         }
         catch (ArgumentException exception) { return BadRequest(new { message = exception.Message }); }
     }
@@ -50,5 +50,5 @@ public sealed class MachineAuthController(MachineAuthorizationService service) :
     { if (!TenantActorReader.TryRead(User, out var actor)) return Unauthorized(); return await service.RevokeAsync(actor, id, ct) ? NoContent() : NotFound(); }
 }
 
-public sealed record MachineAuthOtpRequest(Guid RouteId, string MachineId);
+public sealed record MachineAuthOtpRequest(Guid RouteId, string MachineId, bool Regenerate = false);
 public sealed record ApproveMachineAuthRequest(Guid RequestId, string Otp, int? Days, bool Indefinite);
