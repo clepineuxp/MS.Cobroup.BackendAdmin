@@ -104,6 +104,104 @@ public sealed class LoanTemplateServiceTests
         Assert.Empty((await service.ListAsync(Admin(), true, default)).Templates);
     }
 
+    [Fact]
+    public async Task AdminUpdatesTemplate_IncrementsVersionAndAudits()
+    {
+        var repository = new MemoryRepository();
+        var existing = CreatePublishedTemplate();
+        repository.Items.Add(existing);
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
+
+        var updateInput = new LoanTemplateInput(
+            "Credito actualizado",
+            "Nueva descripcion",
+            LoanTemplateClassification.CustomTemplate,
+            LoanTemplateStatus.Published,
+            60,
+            2_000_000m,
+            MinPrincipalAmount: 50m,
+            MinPercentage: 10m,
+            MaxPercentage: 50m,
+            RouteIds: [routeId]);
+
+        var result = await service.UpdateAsync(Admin(), existing.Id, updateInput, CancellationToken.None);
+
+        Assert.Equal(LoanTemplateOutcome.Success, result.Outcome);
+        Assert.NotNull(result.Template);
+        Assert.Equal(2, result.Template.Version);
+        Assert.Equal("Credito actualizado", result.Template.Name);
+        Assert.Equal(2, result.Template.Versions.Count);
+        Assert.NotNull(repository.Audit);
+        Assert.Contains("Before", repository.Audit.DetailsJson);
+        Assert.Contains("After", repository.Audit.DetailsJson);
+    }
+
+    [Fact]
+    public async Task AdminUpdatesTemplate_ConcurrencyConflict_ReturnsConflictResult()
+    {
+        var repository = new MemoryRepository { SaveOutcome = LoanTemplateSaveOutcome.ConcurrencyConflict };
+        var existing = CreatePublishedTemplate();
+        repository.Items.Add(existing);
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
+
+        var updateInput = new LoanTemplateInput(
+            "Credito modificado",
+            null,
+            LoanTemplateClassification.Low,
+            LoanTemplateStatus.Published,
+            30,
+            1_000_000m,
+            MinPrincipalAmount: 50m,
+            MinPercentage: 10m,
+            MaxPercentage: 20m,
+            RouteIds: [routeId]);
+
+        var result = await service.UpdateAsync(Admin(), existing.Id, updateInput, CancellationToken.None);
+
+        Assert.Equal(LoanTemplateOutcome.Conflict, result.Outcome);
+        Assert.Equal("The loan template changed concurrently. Reload it and try again.", result.Error);
+    }
+
+    [Fact]
+    public async Task AdminUpdatesTemplate_DuplicateName_ReturnsConflictResult()
+    {
+        var repository = new MemoryRepository { NameExists = true };
+        var existing = CreatePublishedTemplate();
+        repository.Items.Add(existing);
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
+
+        var updateInput = new LoanTemplateInput(
+            "Otro Nombre Existente",
+            null,
+            LoanTemplateClassification.Low,
+            LoanTemplateStatus.Published,
+            30,
+            1_000_000m,
+            MinPrincipalAmount: 50m,
+            MinPercentage: 10m,
+            MaxPercentage: 20m,
+            RouteIds: [routeId]);
+
+        var result = await service.UpdateAsync(Admin(), existing.Id, updateInput, CancellationToken.None);
+
+        Assert.Equal(LoanTemplateOutcome.Conflict, result.Outcome);
+        Assert.Equal("A loan template with this name already exists in the organization.", result.Error);
+    }
+
+    [Fact]
+    public async Task NonAdminCannotUpdateTemplate()
+    {
+        var repository = new MemoryRepository();
+        var existing = CreatePublishedTemplate();
+        repository.Items.Add(existing);
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
+        var collector = new TenantActor(Guid.NewGuid(), organizationId, UserRole.Collector);
+
+        var result = await service.UpdateAsync(collector, existing.Id, Input(), CancellationToken.None);
+
+        Assert.Equal(LoanTemplateOutcome.Forbidden, result.Outcome);
+    }
+
     private sealed class MemoryRoutes(Guid routeId) : MS.Cobroup.BackendAdmin.Domain.Interfaces.Repositories.IRouteManagementRepository
     {
         public Task<IReadOnlyCollection<AccessibleRouteSummary>> ListAccessibleAsync(Guid organizationId, Guid userId, UserRole role, CancellationToken cancellationToken) =>
@@ -143,6 +241,7 @@ public sealed class LoanTemplateServiceTests
     {
         public List<LoanTemplate> Items { get; } = [];
         public bool NameExists { get; init; }
+        public LoanTemplateSaveOutcome SaveOutcome { get; set; } = LoanTemplateSaveOutcome.Saved;
         public bool LastPublishedOnly { get; private set; }
         public LoanTemplate? Template { get; private set; }
         public AdministrativeAuditRecord? Audit { get; private set; }
@@ -171,7 +270,7 @@ public sealed class LoanTemplateServiceTests
         public Task<LoanTemplateSaveOutcome> TrySaveAsync(AdministrativeAuditRecord auditRecord, CancellationToken cancellationToken)
         {
             Audit = auditRecord;
-            return Task.FromResult(LoanTemplateSaveOutcome.Saved);
+            return Task.FromResult(SaveOutcome);
         }
     }
 }

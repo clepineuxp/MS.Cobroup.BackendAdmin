@@ -91,6 +91,11 @@ public sealed class EfLoanTemplateRepository(IdentityDbContext dbContext) : ILoa
             await transaction.RollbackAsync(cancellationToken);
             return LoanTemplateSaveOutcome.DuplicateName;
         }
+        catch (DbUpdateException exception) when (IsDuplicateVersion(exception))
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return LoanTemplateSaveOutcome.ConcurrencyConflict;
+        }
     }
 
     private static bool IsDuplicateName(DbUpdateException exception) =>
@@ -98,5 +103,12 @@ public sealed class EfLoanTemplateRepository(IdentityDbContext dbContext) : ILoa
         {
             SqlState: PostgresErrorCodes.UniqueViolation,
             ConstraintName: "IX_loan_templates_OrganizationId_NormalizedName"
+        };
+
+    private static bool IsDuplicateVersion(DbUpdateException exception) =>
+        exception.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "IX_loan_template_versions_LoanTemplateId_Version"
         };
 }
