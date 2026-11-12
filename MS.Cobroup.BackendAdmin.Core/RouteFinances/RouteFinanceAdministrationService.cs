@@ -10,6 +10,7 @@ public interface IOperationalRouteFinanceDirectory
     Task<RouteFinanceProxyResult> ListEntriesAsync(string accessToken, Guid routeId, string section, CancellationToken cancellationToken);
     Task<RouteFinanceProxyResult> CreateEntryAsync(string accessToken, string json, CancellationToken cancellationToken);
     Task<RouteFinanceProxyResult> UpdateEntryAsync(string accessToken, Guid entryId, string json, CancellationToken cancellationToken);
+    Task<RouteFinanceProxyResult> ReopenBoxAsync(string accessToken, Guid routeId, DateOnly? businessDate, CancellationToken cancellationToken);
 }
 
 public sealed class RouteFinanceAdministrationService(IOperationalRouteFinanceDirectory directory)
@@ -42,6 +43,12 @@ public sealed class RouteFinanceAdministrationService(IOperationalRouteFinanceDi
         TenantActor actor, string accessToken, Guid entryId, string json, CancellationToken cancellationToken) =>
         actor.Role is UserRole.Admin
             ? directory.UpdateEntryAsync(accessToken, entryId, json, cancellationToken)
+            : Task.FromResult(RouteFinanceProxyResult.Forbidden());
+
+    public Task<RouteFinanceProxyResult> ReopenBoxAsync(
+        TenantActor actor, string accessToken, Guid routeId, DateOnly? businessDate, CancellationToken cancellationToken) =>
+        actor.Role is UserRole.Admin
+            ? directory.ReopenBoxAsync(accessToken, routeId, businessDate, cancellationToken)
             : Task.FromResult(RouteFinanceProxyResult.Forbidden());
 }
 

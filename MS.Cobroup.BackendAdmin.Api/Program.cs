@@ -199,6 +199,7 @@ builder.Services.AddHttpClient<IOperationalCustomerDirectory, OperationalCustome
         ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
     client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("X-Administrative-Request", "true");
 }).AddHttpMessageHandler<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
 
 builder.Services.AddHttpClient<IOperationalLoanExceptionDirectory, OperationalLoanExceptionDirectoryClient>((services, client) =>
@@ -208,6 +209,7 @@ builder.Services.AddHttpClient<IOperationalLoanExceptionDirectory, OperationalLo
         ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
     client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("X-Administrative-Request", "true");
 }).AddHttpMessageHandler<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
 
 builder.Services.AddScoped<LoanAdministrationService>();
@@ -218,6 +220,7 @@ builder.Services.AddHttpClient<IOperationalLoanDirectory, OperationalLoanDirecto
         ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
     client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("X-Administrative-Request", "true");
 }).AddHttpMessageHandler<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
 
 builder.Services.AddScoped<RouteFinanceAdministrationService>();
@@ -228,6 +231,7 @@ builder.Services.AddHttpClient<IOperationalRouteFinanceDirectory, OperationalRou
         ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
     client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("X-Administrative-Request", "true");
 }).AddHttpMessageHandler<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
 
 builder.Services.AddScoped<MapSupervisionService>();
@@ -239,6 +243,7 @@ builder.Services.AddHttpClient<IOperationalAgendaDirectory, OperationalAgendaDir
         ?? throw new InvalidOperationException("OperationalApi:BaseUrl is required.");
     client.BaseAddress = new Uri(baseUrl, UriKind.Absolute);
     client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.Add("X-Administrative-Request", "true");
 }).AddHttpMessageHandler<MS.Cobroup.BackendAdmin.Api.Security.CorrelationIdDelegatingHandler>();
 
 builder.Services.AddSingleton<IAdministrativeScopeAuthorizer, AdministrativeScopeAuthorizer>();

@@ -32,6 +32,14 @@ namespace MS.Cobroup.BackendAdmin.Infrastructure.Persistence.Migrations
                         .HasMaxLength(3)
                         .HasColumnType("character varying(3)");
 
+                    b.Property<TimeOnly?>("DailyClosingTimeUtc")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<bool>("EnforceDailyClosingSchedule")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<int?>("MaxActiveCustomersPerRoute")
                         .HasColumnType("integer");
 

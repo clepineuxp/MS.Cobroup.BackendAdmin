@@ -68,4 +68,6 @@ public sealed record AccessibleRouteSummary(
     int? MaxActiveCustomers,
     int? MaxActiveLoans,
     decimal InitialBalance = 0m,
-    string TimeZoneId = "America/Bogota");
+    string TimeZoneId = "America/Bogota",
+    TimeOnly? DailyClosingTimeUtc = null,
+    bool EnforceDailyClosingSchedule = false);

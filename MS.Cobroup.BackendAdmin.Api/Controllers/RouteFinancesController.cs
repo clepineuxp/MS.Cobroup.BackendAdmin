@@ -56,6 +56,16 @@ public sealed class RouteFinancesController(RouteFinanceAdministrationService se
         return Proxy(await service.UpdateEntryAsync(actor, ReadBearer(), entryId, request.GetRawText(), cancellationToken));
     }
 
+    [HttpPost("{routeId:guid}/reopen-box")]
+    public async Task<IActionResult> ReopenBox(
+        Guid routeId,
+        [FromQuery] DateOnly? businessDate,
+        CancellationToken cancellationToken)
+    {
+        if (!TenantActorReader.TryRead(User, out var actor)) return Unauthorized();
+        return Proxy(await service.ReopenBoxAsync(actor, ReadBearer(), routeId, businessDate, cancellationToken));
+    }
+
     private string ReadBearer()
     {
         var authorization = Request.Headers.Authorization.ToString();

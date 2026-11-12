@@ -17,13 +17,17 @@ public sealed class OrganizationSettingsServiceTests
         var service = new OrganizationSettingsService(repository);
 
         var result = await service.UpdateAsync(
-            new UpdateOrganizationSettingsCommand(actor, "UTC", "cop", null, 200),
+            new UpdateOrganizationSettingsCommand(actor, "UTC", "cop", null, 200, new TimeOnly(9, 0), true),
             CancellationToken.None);
 
         Assert.Equal(OrganizationSettingsOutcome.Success, result.Outcome);
         Assert.Equal("COP", result.Settings?.CurrencyCode);
         Assert.Null(result.Settings?.MaxActiveCustomersPerRoute);
+        Assert.Equal(new TimeOnly(9, 0), result.Settings?.DailyClosingTimeUtc);
+        Assert.True(result.Settings?.EnforceDailyClosingSchedule);
         Assert.Equal(organizationId, repository.Settings?.OrganizationId);
+        Assert.Equal(new TimeOnly(9, 0), repository.Settings?.DailyClosingTimeUtc);
+        Assert.True(repository.Settings?.EnforceDailyClosingSchedule);
         Assert.Equal("organization.settings.updated", repository.Audit?.EventType);
     }
 

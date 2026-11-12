@@ -177,7 +177,9 @@ public sealed class EfRouteManagementRepository(IdentityDbContext dbContext) : I
                 route.ResolveMaxActiveCustomers(settings?.MaxActiveCustomersPerRoute),
                 route.ResolveMaxActiveLoans(settings?.MaxActiveLoansPerRoute),
                 route.InitialBalance,
-                route.ResolveTimeZoneId(settings?.TimeZoneId)))
+                route.ResolveTimeZoneId(settings?.TimeZoneId),
+                settings?.DailyClosingTimeUtc,
+                settings?.EnforceDailyClosingSchedule ?? false))
             .ToArray();
     }
 }

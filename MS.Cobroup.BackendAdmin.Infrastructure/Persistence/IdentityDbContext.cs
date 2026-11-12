@@ -139,6 +139,8 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.HasKey(item => item.OrganizationId);
             entity.Property(item => item.TimeZoneId).HasMaxLength(100).IsRequired();
             entity.Property(item => item.CurrencyCode).HasMaxLength(3).IsRequired();
+            entity.Property(item => item.DailyClosingTimeUtc);
+            entity.Property(item => item.EnforceDailyClosingSchedule).IsRequired().HasDefaultValue(false);
             entity.HasOne<Organization>()
                 .WithOne()
                 .HasForeignKey<OrganizationSettings>(item => item.OrganizationId)
