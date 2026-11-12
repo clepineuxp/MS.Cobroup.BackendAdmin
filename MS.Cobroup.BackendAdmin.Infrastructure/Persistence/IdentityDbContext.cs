@@ -198,7 +198,6 @@ public sealed class IdentityDbContext(DbContextOptions<IdentityDbContext> option
             entity.Ignore(item => item.MinPercentage);
             entity.Ignore(item => item.MaxPercentage);
             entity.Ignore(item => item.RouteIds);
-            entity.Property<uint>("xmin").IsRowVersion();
             entity.HasIndex(item => new { item.OrganizationId, item.NormalizedName }).IsUnique();
             entity.HasIndex(item => new { item.OrganizationId, item.Status, item.Classification });
             entity.HasOne<Organization>()

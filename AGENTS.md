@@ -519,3 +519,15 @@
 - Validación: build correcto; Core 85/85 e Infrastructure aislada 110/110 (excluidos Postgres y AuthLifecycleHttpTests dependientes de BD real). Prueba de proxy confirma ruta, fechas, bearer y respuesta. Modelo EF sin diferencias pendientes tras recompilar.
 - Limitación: PostgreSQL de desarrollo configurado agota el tiempo de espera al consultar sesión/historial; migraciones no aplicadas ni datos reales alterados. Arranque HTTP correcto; salud completa depende de restablecer BD. Instancias Debug abiertas bloquean recompilación; verificaciones finales en Release.
 - Git: cambios existentes conservados en feature/unique-transaction. Sin commit, push ni despliegue.
+
+### 2026-11-11 — Corrección de concurrencia en edición de plantillas de préstamo
+
+- Solicitud: resolver error al editar plantillas y asignarles rutas ("The loan template changed concurrently. Reload it and try again.").
+- Causa: `IdentityDbContext` tenía mapeada la columna de sistema `xmin` como `RowVersion` en `LoanTemplate`. Al ejecutar `UPDATE`, EF Core incluía `AND xmin = @p` en la cláusula `WHERE`, lo que provocaba 0 filas afectadas y lanzaba `DbUpdateConcurrencyException`.
+- Solución:
+  - Eliminado el token `xmin` en `IdentityDbContext` para `LoanTemplate`.
+  - Agregado en `EfLoanTemplateRepository` el control de unicidad de versión (`IX_loan_template_versions_LoanTemplateId_Version`) ante ediciones concurrentes reales para traducir a `LoanTemplateSaveOutcome.ConcurrencyConflict`.
+  - Actualizado `IdentityDbContextModelSnapshot` para concordancia con el modelo.
+  - Agregadas pruebas unitarias en `LoanTemplateServiceTests` cubriendo `UpdateAsync` (éxito con rutas y rangos, versiones históricas, auditoría, conflicto de concurrencia, nombres duplicados y permisos).
+- Validación: Core Tests 93/93 aprobadas; Infrastructure Model Tests 6/6 aprobadas; compilación Release limpia con 0 advertencias y 0 errores.
+- Commit autorizado: SÍ por comando `^COMMIT` del usuario. Sin push, merge, tag ni despliegue.
