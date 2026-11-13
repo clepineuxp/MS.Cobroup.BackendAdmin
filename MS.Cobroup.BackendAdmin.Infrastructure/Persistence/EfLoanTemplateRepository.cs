@@ -27,6 +27,15 @@ public sealed class EfLoanTemplateRepository(IdentityDbContext dbContext) : ILoa
             .ToArrayAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyCollection<LoanTemplate>> ListTrackedAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken) =>
+        await dbContext.LoanTemplates
+            .Where(template => template.OrganizationId == organizationId)
+            .OrderBy(template => template.Classification)
+            .ThenBy(template => template.Name)
+            .ToArrayAsync(cancellationToken);
+
     public Task<LoanTemplate?> FindAsync(
         Guid organizationId,
         Guid templateId,

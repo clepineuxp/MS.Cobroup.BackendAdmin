@@ -32,11 +32,12 @@ public sealed class LoanTemplateTests
     }
 
     [Fact]
-    public void UpdateCreatesImmutableHistoricalVersion()
+    public void UpdateModifiesTemplateInPlaceWithoutCreatingNewVersion()
     {
         var template = CreateTemplate();
         var original = Assert.Single(template.Versions);
 
+        var newRouteId = Guid.NewGuid();
         template.Update(
             "Credito flexible",
             null,
@@ -46,17 +47,35 @@ public sealed class LoanTemplateTests
             2_000_000m,
             [12.5m],
             Guid.NewGuid(),
-            DateTimeOffset.Parse("2026-10-22T12:00:00Z"), minPrincipalAmount: 500m, routeIds: [Guid.NewGuid()]);
+            DateTimeOffset.Parse("2026-10-22T12:00:00Z"), minPrincipalAmount: 500m, routeIds: [newRouteId]);
 
-        Assert.Equal(2, template.Version);
-        Assert.Equal(2, template.Versions.Count);
-        Assert.Equal("Credito diario", original.Name);
-        Assert.Equal(30, original.MaxLoanDays);
+        Assert.Equal(1, template.Version);
+        Assert.Single(template.Versions);
         Assert.Equal("Credito flexible", template.Name);
-        Assert.Equal(0.01m, original.MinPrincipalAmount);
-        Assert.Equal("[]", original.RouteIdsJson);
+        Assert.Equal(45, template.MaxLoanDays);
         Assert.Equal(500m, template.MinPrincipalAmount);
-        Assert.NotEqual(original.RouteIdsJson, template.RouteIdsJson);
+        Assert.Equal(2_000_000m, template.MaxPrincipalAmount);
+        Assert.Equal(LoanTemplateStatus.Inactive, template.Status);
+        Assert.Contains(newRouteId, template.RouteIds);
+    }
+
+    [Fact]
+    public void SetRouteAssignmentAddsAndRemovesRoute()
+    {
+        var template = CreateTemplate();
+        var actorId = Guid.NewGuid();
+        var route1 = Guid.NewGuid();
+        var route2 = Guid.NewGuid();
+
+        Assert.True(template.SetRouteAssignment(route1, true, actorId, DateTimeOffset.UtcNow));
+        Assert.Contains(route1, template.RouteIds);
+
+        Assert.True(template.SetRouteAssignment(route2, true, actorId, DateTimeOffset.UtcNow));
+        Assert.Equal(2, template.RouteIds.Count);
+
+        Assert.True(template.SetRouteAssignment(route1, false, actorId, DateTimeOffset.UtcNow));
+        Assert.DoesNotContain(route1, template.RouteIds);
+        Assert.Contains(route2, template.RouteIds);
     }
 
     [Theory]

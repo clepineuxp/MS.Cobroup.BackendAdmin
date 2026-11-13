@@ -105,7 +105,7 @@ public sealed class LoanTemplateServiceTests
     }
 
     [Fact]
-    public async Task AdminUpdatesTemplate_IncrementsVersionAndAudits()
+    public async Task AdminUpdatesTemplate_EditsInPlaceWithoutNewVersionAndAudits()
     {
         var repository = new MemoryRepository();
         var existing = CreatePublishedTemplate();
@@ -128,12 +128,58 @@ public sealed class LoanTemplateServiceTests
 
         Assert.Equal(LoanTemplateOutcome.Success, result.Outcome);
         Assert.NotNull(result.Template);
-        Assert.Equal(2, result.Template.Version);
+        Assert.Equal(1, result.Template.Version);
         Assert.Equal("Credito actualizado", result.Template.Name);
-        Assert.Equal(2, result.Template.Versions.Count);
+        Assert.Single(result.Template.Versions);
         Assert.NotNull(repository.Audit);
         Assert.Contains("Before", repository.Audit.DetailsJson);
         Assert.Contains("After", repository.Audit.DetailsJson);
+    }
+
+    [Fact]
+    public async Task ListForRoute_ReturnsTemplatesWithActiveState()
+    {
+        var repository = new MemoryRepository();
+        var templateWithRoute = CreatePublishedTemplate();
+        var otherRouteId = Guid.NewGuid();
+        var templateWithoutRoute = LoanTemplate.Create(
+            organizationId, "Otra", null, LoanTemplateClassification.Low, LoanTemplateStatus.Published, 30, 500_000m, [10m],
+            administratorId, DateTimeOffset.UtcNow, routeIds: [otherRouteId]);
+        repository.Items.Add(templateWithRoute);
+        repository.Items.Add(templateWithoutRoute);
+
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
+        var result = await service.ListForRouteAsync(Admin(), routeId, CancellationToken.None);
+
+        Assert.Equal(LoanTemplateOutcome.Success, result.Outcome);
+        Assert.Equal(2, result.Templates.Count);
+        var activeItem = result.Templates.Single(t => t.Id == templateWithRoute.Id);
+        var inactiveItem = result.Templates.Single(t => t.Id == templateWithoutRoute.Id);
+        Assert.True(activeItem.IsActiveForRoute);
+        Assert.False(inactiveItem.IsActiveForRoute);
+    }
+
+    [Fact]
+    public async Task ConfigureForRoute_ActivatesAndDeactivatesTemplatesForRoute()
+    {
+        var repository = new MemoryRepository();
+        var template1 = CreatePublishedTemplate(); // currently has routeId
+        var template2 = LoanTemplate.Create(
+            organizationId, "Plantilla 2", null, LoanTemplateClassification.Low, LoanTemplateStatus.Published, 30, 500_000m, [10m],
+            administratorId, DateTimeOffset.UtcNow, routeIds: []); // empty
+        repository.Items.Add(template1);
+        repository.Items.Add(template2);
+
+        var service = new LoanTemplateService(repository, new MemoryRoutes(routeId));
+
+        // Activate template2 and deactivate template1 for routeId
+        var result = await service.ConfigureForRouteAsync(Admin(), routeId, [template2.Id], CancellationToken.None);
+
+        Assert.Equal(LoanTemplateOutcome.Success, result.Outcome);
+        Assert.DoesNotContain(routeId, template1.RouteIds);
+        Assert.Contains(routeId, template2.RouteIds);
+        Assert.NotNull(repository.Audit);
+        Assert.Contains("ConfigureRouteLoanTemplates", repository.Audit.DetailsJson);
     }
 
     [Fact]
@@ -210,8 +256,11 @@ public sealed class LoanTemplateServiceTests
         public Task<bool> NameExistsAsync(Guid organizationId, string normalizedName, Guid? excludedRouteId, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<IReadOnlyDictionary<Guid, UserRole>> GetActiveUserRolesAsync(Guid organizationId, IReadOnlyCollection<Guid> userIds, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<bool> TryAddAsync(CollectionRoute route, AdministrativeAuditRecord auditRecord, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<CollectionRoute?> FindAsync(Guid organizationId, Guid id, CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<bool> SaveChangesAsync(AdministrativeAuditRecord auditRecord, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<CollectionRoute?> FindAsync(Guid organizationId, Guid id, CancellationToken cancellationToken) =>
+            id == routeId
+                ? Task.FromResult<CollectionRoute?>(CollectionRoute.Create(organizationId, "Ruta", null, Guid.NewGuid(), [Guid.NewGuid()], Guid.NewGuid(), DateTimeOffset.UtcNow, RouteSettingMode.Inherited, null, RouteSettingMode.Inherited, null, 1000m))
+                : Task.FromResult<CollectionRoute?>(null);
+        public Task<bool> SaveChangesAsync(AdministrativeAuditRecord auditRecord, CancellationToken cancellationToken) => Task.FromResult(true);
     }
 
     private TenantActor Admin() => new(administratorId, organizationId, UserRole.Admin);
@@ -250,6 +299,12 @@ public sealed class LoanTemplateServiceTests
         {
             LastPublishedOnly = publishedOnly;
             IReadOnlyCollection<LoanTemplate> items = Items;
+            return Task.FromResult(items);
+        }
+
+        public Task<IReadOnlyCollection<LoanTemplate>> ListTrackedAsync(Guid organizationId, CancellationToken cancellationToken)
+        {
+            IReadOnlyCollection<LoanTemplate> items = Items.Where(item => item.OrganizationId == organizationId).ToArray();
             return Task.FromResult(items);
         }
 

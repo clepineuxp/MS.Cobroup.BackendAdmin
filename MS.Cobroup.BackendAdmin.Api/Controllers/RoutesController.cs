@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MS.Cobroup.BackendAdmin.Api.Security;
+using MS.Cobroup.BackendAdmin.Core.LoanTemplates;
 using MS.Cobroup.BackendAdmin.Core.Routes;
 using MS.Cobroup.BackendAdmin.Domain.Routes;
 
@@ -12,7 +13,8 @@ namespace MS.Cobroup.BackendAdmin.Api.Controllers;
 public sealed class RoutesController(
     CreateRouteService createRoute,
     ListRoutesService listRoutes,
-    UpdateRouteService updateRoute) : ControllerBase
+    UpdateRouteService updateRoute,
+    LoanTemplateService loanTemplates) : ControllerBase
 {
     [HttpGet]
     public async Task<IActionResult> List(CancellationToken cancellationToken)
@@ -66,6 +68,11 @@ public sealed class RoutesController(
             return BadRequest(new { message = exception.Message });
         }
 
+        if (result.Outcome is CreateRouteOutcome.Created && request.ActiveTemplateIds is not null && result.RouteId.HasValue)
+        {
+            await loanTemplates.ConfigureForRouteAsync(actor, result.RouteId.Value, request.ActiveTemplateIds, cancellationToken);
+        }
+
         return result.Outcome switch
         {
             CreateRouteOutcome.Created => Created($"/api/v1/routes/{result.RouteId}", new { id = result.RouteId }),
@@ -111,6 +118,11 @@ public sealed class RoutesController(
             return BadRequest(new { message = exception.Message });
         }
 
+        if (result.Outcome is UpdateRouteOutcome.Updated && request.ActiveTemplateIds is not null)
+        {
+            await loanTemplates.ConfigureForRouteAsync(actor, routeId, request.ActiveTemplateIds, cancellationToken);
+        }
+
         return result.Outcome switch
         {
             UpdateRouteOutcome.Updated => NoContent(),
@@ -122,7 +134,51 @@ public sealed class RoutesController(
         };
     }
 
+    [HttpGet("{routeId:guid}/loan-templates")]
+    public async Task<IActionResult> ListRouteLoanTemplates(
+        Guid routeId,
+        CancellationToken cancellationToken)
+    {
+        if (!TenantActorReader.TryRead(User, out var actor))
+        {
+            return Unauthorized();
+        }
+
+        var result = await loanTemplates.ListForRouteAsync(actor, routeId, cancellationToken);
+        return result.Outcome switch
+        {
+            LoanTemplateOutcome.Success => Ok(result.Templates),
+            LoanTemplateOutcome.NotFound => NotFound(new { message = result.Error }),
+            LoanTemplateOutcome.Forbidden => Forbid(),
+            _ => Problem("No fue posible consultar las plantillas de la ruta.")
+        };
+    }
+
+    [HttpPut("{routeId:guid}/loan-templates")]
+    public async Task<IActionResult> ConfigureRouteLoanTemplates(
+        Guid routeId,
+        ConfigureRouteLoanTemplatesRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!TenantActorReader.TryRead(User, out var actor))
+        {
+            return Unauthorized();
+        }
+
+        var result = await loanTemplates.ConfigureForRouteAsync(actor, routeId, request.ActiveTemplateIds ?? [], cancellationToken);
+        return result.Outcome switch
+        {
+            LoanTemplateOutcome.Success => Ok(result.Templates),
+            LoanTemplateOutcome.NotFound => NotFound(new { message = result.Error }),
+            LoanTemplateOutcome.Invalid => BadRequest(new { message = result.Error }),
+            LoanTemplateOutcome.Forbidden => Forbid(),
+            LoanTemplateOutcome.Conflict => Conflict(new { message = result.Error }),
+            _ => Problem("No fue posible actualizar las plantillas de la ruta.")
+        };
+    }
 }
+
+public sealed record ConfigureRouteLoanTemplatesRequest(IReadOnlyCollection<Guid>? ActiveTemplateIds);
 
 public sealed record CreateRouteRequest(
     string Name,
@@ -134,7 +190,8 @@ public sealed record CreateRouteRequest(
     int? MaxActiveCustomersOverride = null,
     RouteSettingMode MaxActiveLoansMode = RouteSettingMode.Inherited,
     int? MaxActiveLoansOverride = null,
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+    IReadOnlyCollection<Guid>? ActiveTemplateIds = null);
 
 public sealed record UpdateRouteRequest(
     string Name,
@@ -146,4 +203,5 @@ public sealed record UpdateRouteRequest(
     int? MaxActiveCustomersOverride,
     RouteSettingMode MaxActiveLoansMode,
     int? MaxActiveLoansOverride,
-    string? TimeZoneId = null);
+    string? TimeZoneId = null,
+    IReadOnlyCollection<Guid>? ActiveTemplateIds = null);
