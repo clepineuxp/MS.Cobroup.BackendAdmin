@@ -99,3 +99,29 @@ public sealed record LoanTemplateListResult(
 
     public static LoanTemplateListResult Forbidden() => new(LoanTemplateOutcome.Forbidden, []);
 }
+
+public sealed record RouteLoanTemplateSummary(
+    Guid Id,
+    string Name,
+    string? Description,
+    LoanTemplateClassification Classification,
+    LoanTemplateStatus Status,
+    int MaxLoanDays,
+    decimal MinPrincipalAmount,
+    decimal MaxPrincipalAmount,
+    decimal MinPercentage,
+    decimal MaxPercentage,
+    bool IsActiveForRoute);
+
+public sealed record RouteLoanTemplatesResult(
+    LoanTemplateOutcome Outcome,
+    IReadOnlyCollection<RouteLoanTemplateSummary> Templates,
+    string? Error)
+{
+    public static RouteLoanTemplatesResult Success(IReadOnlyCollection<RouteLoanTemplateSummary> templates) =>
+        new(LoanTemplateOutcome.Success, templates, null);
+    public static RouteLoanTemplatesResult Forbidden() => new(LoanTemplateOutcome.Forbidden, [], null);
+    public static RouteLoanTemplatesResult NotFound(string error = "Ruta no encontrada.") => new(LoanTemplateOutcome.NotFound, [], error);
+    public static RouteLoanTemplatesResult Invalid(string error) => new(LoanTemplateOutcome.Invalid, [], error);
+    public static RouteLoanTemplatesResult Conflict(string error) => new(LoanTemplateOutcome.Conflict, [], error);
+}

@@ -10,6 +10,10 @@ public interface ILoanTemplateRepository
         bool publishedOnly,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyCollection<LoanTemplate>> ListTrackedAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken);
+
     Task<LoanTemplate?> FindAsync(
         Guid organizationId,
         Guid templateId,

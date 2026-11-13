@@ -151,6 +151,120 @@ public sealed class LoanTemplateService(ILoanTemplateRepository repository, IRou
         }
     }
 
+    public async Task<RouteLoanTemplatesResult> ListForRouteAsync(
+        TenantActor actor,
+        Guid routeId,
+        CancellationToken cancellationToken)
+    {
+        if (actor.Role is not UserRole.Admin)
+        {
+            return RouteLoanTemplatesResult.Forbidden();
+        }
+
+        var route = await routes.FindAsync(actor.OrganizationId, routeId, cancellationToken);
+        if (route is null)
+        {
+            return RouteLoanTemplatesResult.NotFound("La ruta especificada no existe en esta organización.");
+        }
+
+        var templates = await repository.ListAsync(actor.OrganizationId, publishedOnly: false, cancellationToken);
+        var summaries = templates.Select(template => new RouteLoanTemplateSummary(
+            template.Id,
+            template.Name,
+            template.Description,
+            template.Classification,
+            template.Status,
+            template.MaxLoanDays,
+            template.MinPrincipalAmount,
+            template.MaxPrincipalAmount,
+            template.MinPercentage,
+            template.MaxPercentage,
+            template.RouteIds.Contains(routeId)
+        )).ToArray();
+
+        return RouteLoanTemplatesResult.Success(summaries);
+    }
+
+    public async Task<RouteLoanTemplatesResult> ConfigureForRouteAsync(
+        TenantActor actor,
+        Guid routeId,
+        IReadOnlyCollection<Guid> activeTemplateIds,
+        CancellationToken cancellationToken)
+    {
+        if (actor.Role is not UserRole.Admin)
+        {
+            return RouteLoanTemplatesResult.Forbidden();
+        }
+
+        var route = await routes.FindAsync(actor.OrganizationId, routeId, cancellationToken);
+        if (route is null)
+        {
+            return RouteLoanTemplatesResult.NotFound("La ruta especificada no existe en esta organización.");
+        }
+
+        var templates = await repository.ListTrackedAsync(actor.OrganizationId, cancellationToken);
+        var orgTemplateIds = templates.Select(t => t.Id).ToHashSet();
+        if (activeTemplateIds.Any(id => !orgTemplateIds.Contains(id)))
+        {
+            return RouteLoanTemplatesResult.Invalid("Una o más plantillas seleccionadas no pertenecen a la organización.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var activeSet = activeTemplateIds.ToHashSet();
+        bool anyChanged = false;
+        var affectedTemplates = new List<object>();
+
+        foreach (var template in templates)
+        {
+            bool shouldBeActive = activeSet.Contains(template.Id);
+            bool wasActive = template.RouteIds.Contains(routeId);
+            if (shouldBeActive != wasActive)
+            {
+                template.SetRouteAssignment(routeId, shouldBeActive, actor.UserId, now);
+                anyChanged = true;
+                affectedTemplates.Add(new { template.Id, template.Name, IsActive = shouldBeActive });
+            }
+        }
+
+        if (anyChanged)
+        {
+            var audit = AdministrativeAuditRecord.RouteUpdated(
+                actor.OrganizationId,
+                actor.UserId,
+                routeId,
+                now,
+                JsonSerializer.Serialize(new
+                {
+                    Action = "ConfigureRouteLoanTemplates",
+                    RouteId = routeId,
+                    ActiveTemplateIds = activeTemplateIds,
+                    Changes = affectedTemplates
+                }));
+
+            var outcome = await repository.TrySaveAsync(audit, cancellationToken);
+            if (outcome is not LoanTemplateSaveOutcome.Saved)
+            {
+                return RouteLoanTemplatesResult.Conflict("No fue posible guardar la configuración de plantillas debido a concurrencia.");
+            }
+        }
+
+        var updatedSummaries = templates.Select(template => new RouteLoanTemplateSummary(
+            template.Id,
+            template.Name,
+            template.Description,
+            template.Classification,
+            template.Status,
+            template.MaxLoanDays,
+            template.MinPrincipalAmount,
+            template.MaxPrincipalAmount,
+            template.MinPercentage,
+            template.MaxPercentage,
+            template.RouteIds.Contains(routeId)
+        )).ToArray();
+
+        return RouteLoanTemplatesResult.Success(updatedSummaries);
+    }
+
     private async Task ValidateRoutesAsync(TenantActor actor, IReadOnlyCollection<Guid> routeIds, CancellationToken cancellationToken)
     {
         if (routeIds.Count == 0) return; // Unassigned templates are never available for origination.

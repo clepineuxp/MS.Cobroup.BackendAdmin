@@ -153,10 +153,44 @@ public sealed class LoanTemplate
         MaxPrincipalAmount = maximum;
         RouteIdsJson = routesJson;
         AllowedPercentagesJson = percentagesJson;
-        Version++;
         UpdatedByUserId = updatedByUserId;
         UpdatedAtUtc = updatedAtUtc;
-        AddVersion(updatedByUserId, updatedAtUtc);
+    }
+
+    public void AssignRoutes(IReadOnlyCollection<Guid> routeIds, Guid updatedByUserId, DateTimeOffset updatedAtUtc)
+    {
+        if (updatedByUserId == Guid.Empty)
+        {
+            throw new ArgumentException("Updater is required.", nameof(updatedByUserId));
+        }
+
+        RouteIdsJson = SerializeRoutes(routeIds ?? []);
+        UpdatedByUserId = updatedByUserId;
+        UpdatedAtUtc = updatedAtUtc;
+    }
+
+    public bool SetRouteAssignment(Guid routeId, bool assign, Guid updatedByUserId, DateTimeOffset updatedAtUtc)
+    {
+        if (updatedByUserId == Guid.Empty)
+        {
+            throw new ArgumentException("Updater is required.", nameof(updatedByUserId));
+        }
+
+        if (routeId == Guid.Empty)
+        {
+            throw new ArgumentException("Route is required.", nameof(routeId));
+        }
+
+        var currentRoutes = RouteIds.ToHashSet();
+        var changed = assign ? currentRoutes.Add(routeId) : currentRoutes.Remove(routeId);
+        if (changed)
+        {
+            RouteIdsJson = SerializeRoutes(currentRoutes);
+            UpdatedByUserId = updatedByUserId;
+            UpdatedAtUtc = updatedAtUtc;
+        }
+
+        return changed;
     }
 
     public static string NormalizeName(string value) =>
