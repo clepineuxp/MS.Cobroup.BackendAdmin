@@ -34,6 +34,15 @@ public sealed class OperationalRouteFinanceDirectoryClient(HttpClient httpClient
         string accessToken, Guid entryId, string json, CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Put, $"api/operations/v1/route-finances/entries/{entryId:D}", accessToken, json, cancellationToken);
 
+    public Task<RouteFinanceProxyResult> ReopenBoxAsync(
+        string accessToken, Guid routeId, DateOnly? businessDate, CancellationToken cancellationToken)
+    {
+        var uri = businessDate.HasValue
+            ? $"api/operations/v1/route-finances/{routeId:D}/reopen-box?businessDate={businessDate.Value:yyyy-MM-dd}"
+            : $"api/operations/v1/route-finances/{routeId:D}/reopen-box";
+        return SendAsync(HttpMethod.Post, uri, accessToken, null, cancellationToken);
+    }
+
     private async Task<RouteFinanceProxyResult> SendAsync(
         HttpMethod method,
         string uri,

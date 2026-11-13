@@ -43,7 +43,9 @@ public sealed class OrganizationSettingsController(OrganizationSettingsService s
                     request.TimeZoneId,
                     request.CurrencyCode,
                     request.MaxActiveCustomersPerRoute,
-                    request.MaxActiveLoansPerRoute),
+                    request.MaxActiveLoansPerRoute,
+                    request.DailyClosingTimeUtc,
+                    request.EnforceDailyClosingSchedule),
                 cancellationToken);
         }
         catch (ArgumentException exception)
@@ -65,4 +67,6 @@ public sealed record UpdateOrganizationSettingsRequest(
     string TimeZoneId,
     string CurrencyCode,
     int? MaxActiveCustomersPerRoute,
-    int? MaxActiveLoansPerRoute);
+    int? MaxActiveLoansPerRoute,
+    TimeOnly? DailyClosingTimeUtc = null,
+    bool EnforceDailyClosingSchedule = false);

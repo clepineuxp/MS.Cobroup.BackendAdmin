@@ -12,11 +12,13 @@ public sealed class OrganizationSettings
         string currencyCode,
         int? maxActiveCustomersPerRoute,
         int? maxActiveLoansPerRoute,
+        TimeOnly? dailyClosingTimeUtc,
+        bool enforceDailyClosingSchedule,
         Guid updatedByUserId,
         DateTimeOffset updatedAtUtc)
     {
         OrganizationId = RequireId(organizationId, nameof(organizationId));
-        Apply(timeZoneId, currencyCode, maxActiveCustomersPerRoute, maxActiveLoansPerRoute, updatedByUserId, updatedAtUtc);
+        Apply(timeZoneId, currencyCode, maxActiveCustomersPerRoute, maxActiveLoansPerRoute, dailyClosingTimeUtc, enforceDailyClosingSchedule, updatedByUserId, updatedAtUtc);
     }
 
     public Guid OrganizationId { get; private set; }
@@ -29,6 +31,10 @@ public sealed class OrganizationSettings
 
     public int? MaxActiveLoansPerRoute { get; private set; }
 
+    public TimeOnly? DailyClosingTimeUtc { get; private set; }
+
+    public bool EnforceDailyClosingSchedule { get; private set; }
+
     public Guid UpdatedByUserId { get; private set; }
 
     public DateTimeOffset UpdatedAtUtc { get; private set; }
@@ -39,6 +45,8 @@ public sealed class OrganizationSettings
         string currencyCode,
         int? maxActiveCustomersPerRoute,
         int? maxActiveLoansPerRoute,
+        TimeOnly? dailyClosingTimeUtc,
+        bool enforceDailyClosingSchedule,
         Guid updatedByUserId,
         DateTimeOffset updatedAtUtc) =>
         new(
@@ -47,6 +55,8 @@ public sealed class OrganizationSettings
             currencyCode,
             maxActiveCustomersPerRoute,
             maxActiveLoansPerRoute,
+            dailyClosingTimeUtc,
+            enforceDailyClosingSchedule,
             updatedByUserId,
             updatedAtUtc);
 
@@ -55,15 +65,19 @@ public sealed class OrganizationSettings
         string currencyCode,
         int? maxActiveCustomersPerRoute,
         int? maxActiveLoansPerRoute,
+        TimeOnly? dailyClosingTimeUtc,
+        bool enforceDailyClosingSchedule,
         Guid updatedByUserId,
         DateTimeOffset updatedAtUtc) =>
-        Apply(timeZoneId, currencyCode, maxActiveCustomersPerRoute, maxActiveLoansPerRoute, updatedByUserId, updatedAtUtc);
+        Apply(timeZoneId, currencyCode, maxActiveCustomersPerRoute, maxActiveLoansPerRoute, dailyClosingTimeUtc, enforceDailyClosingSchedule, updatedByUserId, updatedAtUtc);
 
     private void Apply(
         string timeZoneId,
         string currencyCode,
         int? maxActiveCustomersPerRoute,
         int? maxActiveLoansPerRoute,
+        TimeOnly? dailyClosingTimeUtc,
+        bool enforceDailyClosingSchedule,
         Guid updatedByUserId,
         DateTimeOffset updatedAtUtc)
     {
@@ -76,6 +90,8 @@ public sealed class OrganizationSettings
 
         MaxActiveCustomersPerRoute = RequirePositive(maxActiveCustomersPerRoute, nameof(maxActiveCustomersPerRoute));
         MaxActiveLoansPerRoute = RequirePositive(maxActiveLoansPerRoute, nameof(maxActiveLoansPerRoute));
+        DailyClosingTimeUtc = dailyClosingTimeUtc;
+        EnforceDailyClosingSchedule = enforceDailyClosingSchedule;
         UpdatedByUserId = RequireId(updatedByUserId, nameof(updatedByUserId));
         UpdatedAtUtc = updatedAtUtc;
     }

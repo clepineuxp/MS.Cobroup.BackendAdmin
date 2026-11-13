@@ -50,7 +50,9 @@ public sealed class OrganizationSettingsService(IOrganizationSettingsRepository 
             settings.TimeZoneId,
             settings.CurrencyCode,
             settings.MaxActiveCustomersPerRoute,
-            settings.MaxActiveLoansPerRoute
+            settings.MaxActiveLoansPerRoute,
+            settings.DailyClosingTimeUtc,
+            settings.EnforceDailyClosingSchedule
         };
         var isNew = settings is null;
         if (settings is null)
@@ -61,6 +63,8 @@ public sealed class OrganizationSettingsService(IOrganizationSettingsRepository 
                 command.CurrencyCode,
                 command.MaxActiveCustomersPerRoute,
                 command.MaxActiveLoansPerRoute,
+                command.DailyClosingTimeUtc,
+                command.EnforceDailyClosingSchedule,
                 command.Actor.UserId,
                 now);
         }
@@ -71,6 +75,8 @@ public sealed class OrganizationSettingsService(IOrganizationSettingsRepository 
                 command.CurrencyCode,
                 command.MaxActiveCustomersPerRoute,
                 command.MaxActiveLoansPerRoute,
+                command.DailyClosingTimeUtc,
+                command.EnforceDailyClosingSchedule,
                 command.Actor.UserId,
                 now);
         }
@@ -90,7 +96,9 @@ public sealed class OrganizationSettingsService(IOrganizationSettingsRepository 
                         settings.TimeZoneId,
                         settings.CurrencyCode,
                         settings.MaxActiveCustomersPerRoute,
-                        settings.MaxActiveLoansPerRoute
+                        settings.MaxActiveLoansPerRoute,
+                        settings.DailyClosingTimeUtc,
+                        settings.EnforceDailyClosingSchedule
                     }
                 })),
             cancellationToken);
@@ -103,6 +111,8 @@ public sealed class OrganizationSettingsService(IOrganizationSettingsRepository 
             settings.CurrencyCode,
             settings.MaxActiveCustomersPerRoute,
             settings.MaxActiveLoansPerRoute,
+            settings.DailyClosingTimeUtc,
+            settings.EnforceDailyClosingSchedule,
             settings.UpdatedAtUtc);
 }
 
@@ -111,13 +121,17 @@ public sealed record UpdateOrganizationSettingsCommand(
     string TimeZoneId,
     string CurrencyCode,
     int? MaxActiveCustomersPerRoute,
-    int? MaxActiveLoansPerRoute);
+    int? MaxActiveLoansPerRoute,
+    TimeOnly? DailyClosingTimeUtc = null,
+    bool EnforceDailyClosingSchedule = false);
 
 public sealed record OrganizationSettingsSummary(
     string TimeZoneId,
     string CurrencyCode,
     int? MaxActiveCustomersPerRoute,
     int? MaxActiveLoansPerRoute,
+    TimeOnly? DailyClosingTimeUtc,
+    bool EnforceDailyClosingSchedule,
     DateTimeOffset UpdatedAtUtc);
 
 public enum OrganizationSettingsOutcome
