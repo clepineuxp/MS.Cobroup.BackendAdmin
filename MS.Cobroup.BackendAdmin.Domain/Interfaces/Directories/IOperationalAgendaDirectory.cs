@@ -29,6 +29,38 @@ public interface IOperationalAgendaDirectory
         decimal originLat,
         decimal originLon,
         CancellationToken cancellationToken);
+
+    Task<AgendaProxyResult> GetNonPaymentReasonsAsync(
+        string accessToken,
+        bool includeInactive,
+        CancellationToken cancellationToken);
+
+    Task<AgendaProxyResult> CreateNonPaymentReasonAsync(
+        string accessToken,
+        string name,
+        string? description,
+        int displayOrder,
+        CancellationToken cancellationToken);
+
+    Task<AgendaProxyResult> UpdateNonPaymentReasonAsync(
+        string accessToken,
+        Guid reasonId,
+        string name,
+        string? description,
+        int displayOrder,
+        bool isActive,
+        CancellationToken cancellationToken);
+
+    Task<AgendaProxyResult> ToggleNonPaymentReasonStatusAsync(
+        string accessToken,
+        Guid reasonId,
+        bool isActive,
+        CancellationToken cancellationToken);
+
+    Task<AgendaProxyResult> DeleteNonPaymentReasonAsync(
+        string accessToken,
+        Guid reasonId,
+        CancellationToken cancellationToken);
 }
 
 public sealed record AgendaProxyResult(int StatusCode, string? Content, string ContentType)

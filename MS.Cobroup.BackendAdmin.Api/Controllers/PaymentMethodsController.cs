@@ -95,6 +95,21 @@ public sealed class PaymentMethodsController(PaymentMethodService service) : Con
         return MapResult(result);
     }
 
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = "tenant-admin")]
+    public async Task<IActionResult> Delete(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        if (!TenantActorReader.TryRead(User, out var actor))
+        {
+            return Unauthorized();
+        }
+
+        var result = await service.DeleteAsync(actor, id, cancellationToken);
+        return MapResult(result);
+    }
+
     private IActionResult MapResult(PaymentMethodResult result)
     {
         if (result.Success && result.Item is not null)

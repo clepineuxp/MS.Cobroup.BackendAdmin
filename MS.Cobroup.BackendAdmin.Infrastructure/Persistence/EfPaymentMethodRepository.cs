@@ -136,6 +136,43 @@ public sealed class EfPaymentMethodRepository(IdentityDbContext dbContext) : IPa
         }
     }
 
+    public async Task<PaymentMethodSaveOutcome> TryDeleteAsync(
+        PaymentMethod paymentMethod,
+        AdministrativeAuditRecord auditRecord,
+        CancellationToken cancellationToken)
+    {
+        var hasTransaction = dbContext.Database.CurrentTransaction is not null;
+        var transaction = hasTransaction ? null : await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        dbContext.PaymentMethods.Remove(paymentMethod);
+        dbContext.AdministrativeAuditRecords.Add(auditRecord);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+            return PaymentMethodSaveOutcome.Saved;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+            }
+            return PaymentMethodSaveOutcome.ConcurrencyConflict;
+        }
+        finally
+        {
+            if (transaction is not null)
+            {
+                await transaction.DisposeAsync();
+            }
+        }
+    }
+
     private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 }

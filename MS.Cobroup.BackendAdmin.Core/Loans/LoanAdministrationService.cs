@@ -14,9 +14,10 @@ public sealed class LoanAdministrationService(IOperationalLoanDirectory director
         string? status,
         int page,
         int pageSize,
-        CancellationToken cancellationToken) =>
+        CancellationToken cancellationToken,
+        string? search = null) =>
         actor.Role is UserRole.Admin
-            ? directory.SearchAsync(accessToken, routeId, customerId, status, page, pageSize, cancellationToken)
+            ? directory.SearchAsync(accessToken, routeId, customerId, status, page, pageSize, cancellationToken, search)
             : Task.FromResult(new LoanProxyResult(403, null, "application/problem+json"));
 
     public Task<LoanProxyResult> GetAsync(

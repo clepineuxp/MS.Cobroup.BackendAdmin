@@ -9,7 +9,8 @@ public interface IOperationalLoanDirectory
         string? status,
         int page,
         int pageSize,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string? search = null);
 
     Task<LoanProxyResult> GetAsync(
         string accessToken,

@@ -65,4 +65,34 @@ internal sealed class FakeAgendaDirectory : IOperationalAgendaDirectory
         LastToken = accessToken;
         return Task.FromResult(new AgendaProxyResult(200, "{\"items\":[]}", "application/json"));
     }
+
+    public Task<AgendaProxyResult> GetNonPaymentReasonsAsync(string accessToken, bool includeInactive, CancellationToken cancellationToken)
+    {
+        LastToken = accessToken;
+        return Task.FromResult(new AgendaProxyResult(200, "[]", "application/json"));
+    }
+
+    public Task<AgendaProxyResult> CreateNonPaymentReasonAsync(string accessToken, string name, string? description, int displayOrder, CancellationToken cancellationToken)
+    {
+        LastToken = accessToken;
+        return Task.FromResult(new AgendaProxyResult(200, "{}", "application/json"));
+    }
+
+    public Task<AgendaProxyResult> UpdateNonPaymentReasonAsync(string accessToken, Guid reasonId, string name, string? description, int displayOrder, bool isActive, CancellationToken cancellationToken)
+    {
+        LastToken = accessToken;
+        return Task.FromResult(new AgendaProxyResult(200, "{}", "application/json"));
+    }
+
+    public Task<AgendaProxyResult> ToggleNonPaymentReasonStatusAsync(string accessToken, Guid reasonId, bool isActive, CancellationToken cancellationToken)
+    {
+        LastToken = accessToken;
+        return Task.FromResult(new AgendaProxyResult(200, "{}", "application/json"));
+    }
+
+    public Task<AgendaProxyResult> DeleteNonPaymentReasonAsync(string accessToken, Guid reasonId, CancellationToken cancellationToken)
+    {
+        LastToken = accessToken;
+        return Task.FromResult(new AgendaProxyResult(200, "true", "application/json"));
+    }
 }

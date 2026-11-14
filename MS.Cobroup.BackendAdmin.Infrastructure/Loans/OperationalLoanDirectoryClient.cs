@@ -12,12 +12,14 @@ public sealed class OperationalLoanDirectoryClient(HttpClient httpClient) : IOpe
         string? status,
         int page,
         int pageSize,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? search = null)
     {
         var query = new List<string> { $"page={page}", $"pageSize={pageSize}" };
         if (routeId.HasValue) query.Add($"routeId={routeId.Value:D}");
         if (customerId.HasValue) query.Add($"customerId={customerId.Value:D}");
         if (!string.IsNullOrWhiteSpace(status)) query.Add($"status={Uri.EscapeDataString(status.Trim())}");
+        if (!string.IsNullOrWhiteSpace(search)) query.Add($"search={Uri.EscapeDataString(search.Trim())}");
         return SendAsync(HttpMethod.Get, $"api/operations/v1/loans?{string.Join('&', query)}", accessToken, cancellationToken);
     }
 
