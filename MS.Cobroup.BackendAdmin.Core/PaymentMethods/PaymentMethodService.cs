@@ -179,4 +179,37 @@ public sealed class PaymentMethodService(IPaymentMethodRepository repository)
             _ => PaymentMethodResult.Failure("Conflicto de concurrencia al cambiar el estado del medio de pago.", PaymentMethodErrorType.Conflict)
         };
     }
+
+    public async Task<PaymentMethodResult> DeleteAsync(
+        TenantActor actor,
+        Guid paymentMethodId,
+        CancellationToken cancellationToken)
+    {
+        if (actor.Role is not UserRole.Admin)
+        {
+            return PaymentMethodResult.Failure("Solo el administrador puede eliminar medios de pago.", PaymentMethodErrorType.Forbidden);
+        }
+
+        var paymentMethod = await repository.FindAsync(actor.OrganizationId, paymentMethodId, cancellationToken);
+        if (paymentMethod is null)
+        {
+            return PaymentMethodResult.Failure("Medio de pago no encontrado.", PaymentMethodErrorType.NotFound);
+        }
+
+        var nowUtc = DateTime.UtcNow;
+        var snapshot = PaymentMethodItem.FromDomain(paymentMethod);
+        var audit = AdministrativeAuditRecord.PaymentMethodDeleted(
+            actor.OrganizationId,
+            actor.UserId,
+            paymentMethod.Id,
+            nowUtc,
+            JsonSerializer.Serialize(new { paymentMethod.Name, paymentMethod.DisplayOrder }));
+
+        var outcome = await repository.TryDeleteAsync(paymentMethod, audit, cancellationToken);
+        return outcome switch
+        {
+            PaymentMethodSaveOutcome.Saved => PaymentMethodResult.Ok(snapshot),
+            _ => PaymentMethodResult.Failure("Conflicto de concurrencia al eliminar el medio de pago.", PaymentMethodErrorType.Conflict)
+        };
+    }
 }

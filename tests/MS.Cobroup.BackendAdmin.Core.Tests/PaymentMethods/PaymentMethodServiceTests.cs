@@ -171,5 +171,15 @@ public sealed class PaymentMethodServiceTests
             LastAudit = auditRecord;
             return Task.FromResult(PaymentMethodSaveOutcome.Saved);
         }
+
+        public Task<PaymentMethodSaveOutcome> TryDeleteAsync(
+            PaymentMethod paymentMethod,
+            AdministrativeAuditRecord auditRecord,
+            CancellationToken cancellationToken)
+        {
+            _items.Remove(paymentMethod);
+            LastAudit = auditRecord;
+            return Task.FromResult(PaymentMethodSaveOutcome.Saved);
+        }
     }
 }

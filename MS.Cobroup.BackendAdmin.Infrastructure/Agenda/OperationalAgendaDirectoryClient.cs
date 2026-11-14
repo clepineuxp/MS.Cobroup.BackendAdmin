@@ -72,6 +72,72 @@ public sealed class OperationalAgendaDirectoryClient(HttpClient httpClient) : IO
         return SendAsync(HttpMethod.Post, "api/operations/v1/agenda/optimize-sequence", body, accessToken, cancellationToken);
     }
 
+    public Task<AgendaProxyResult> GetNonPaymentReasonsAsync(
+        string accessToken,
+        bool includeInactive,
+        CancellationToken cancellationToken)
+    {
+        return SendAsync(
+            HttpMethod.Get,
+            $"api/operations/v1/agenda/non-payment-reasons?includeInactive={includeInactive.ToString().ToLowerInvariant()}",
+            null,
+            accessToken,
+            cancellationToken);
+    }
+
+    public Task<AgendaProxyResult> CreateNonPaymentReasonAsync(
+        string accessToken,
+        string name,
+        string? description,
+        int displayOrder,
+        CancellationToken cancellationToken)
+    {
+        var body = JsonSerializer.Serialize(new
+        {
+            name,
+            description,
+            displayOrder
+        });
+        return SendAsync(HttpMethod.Post, "api/operations/v1/agenda/non-payment-reasons", body, accessToken, cancellationToken);
+    }
+
+    public Task<AgendaProxyResult> UpdateNonPaymentReasonAsync(
+        string accessToken,
+        Guid reasonId,
+        string name,
+        string? description,
+        int displayOrder,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        var body = JsonSerializer.Serialize(new
+        {
+            name,
+            description,
+            displayOrder,
+            isActive
+        });
+        return SendAsync(HttpMethod.Put, $"api/operations/v1/agenda/non-payment-reasons/{reasonId:D}", body, accessToken, cancellationToken);
+    }
+
+    public Task<AgendaProxyResult> ToggleNonPaymentReasonStatusAsync(
+        string accessToken,
+        Guid reasonId,
+        bool isActive,
+        CancellationToken cancellationToken)
+    {
+        var body = JsonSerializer.Serialize(new { isActive });
+        return SendAsync(HttpMethod.Put, $"api/operations/v1/agenda/non-payment-reasons/{reasonId:D}/status", body, accessToken, cancellationToken);
+    }
+
+    public Task<AgendaProxyResult> DeleteNonPaymentReasonAsync(
+        string accessToken,
+        Guid reasonId,
+        CancellationToken cancellationToken)
+    {
+        return SendAsync(HttpMethod.Delete, $"api/operations/v1/agenda/non-payment-reasons/{reasonId:D}", null, accessToken, cancellationToken);
+    }
+
     private async Task<AgendaProxyResult> SendAsync(
         HttpMethod method,
         string uri,

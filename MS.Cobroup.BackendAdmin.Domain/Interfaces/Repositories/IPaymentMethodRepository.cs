@@ -29,6 +29,11 @@ public interface IPaymentMethodRepository
     Task<PaymentMethodSaveOutcome> TrySaveAsync(
         AdministrativeAuditRecord auditRecord,
         CancellationToken cancellationToken);
+
+    Task<PaymentMethodSaveOutcome> TryDeleteAsync(
+        PaymentMethod paymentMethod,
+        AdministrativeAuditRecord auditRecord,
+        CancellationToken cancellationToken);
 }
 
 public enum PaymentMethodSaveOutcome

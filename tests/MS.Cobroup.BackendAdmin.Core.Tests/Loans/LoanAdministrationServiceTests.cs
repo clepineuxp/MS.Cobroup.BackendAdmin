@@ -54,7 +54,8 @@ public sealed class LoanAdministrationServiceTests
             string? status,
             int page,
             int pageSize,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            string? search = null)
         {
             Token = accessToken;
             return Task.FromResult(new LoanProxyResult(200, "{\"items\":[]}", "application/json"));

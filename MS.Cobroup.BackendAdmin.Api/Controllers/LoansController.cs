@@ -15,12 +15,13 @@ public sealed class LoansController(LoanAdministrationService service) : Control
         [FromQuery] Guid? routeId,
         [FromQuery] Guid? customerId,
         [FromQuery] string? status,
+        [FromQuery] string? search,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
         if (!TenantActorReader.TryRead(User, out var actor)) return Unauthorized();
-        var result = await service.SearchAsync(actor, ReadBearer(), routeId, customerId, status, page, pageSize, cancellationToken);
+        var result = await service.SearchAsync(actor, ReadBearer(), routeId, customerId, status, page, pageSize, cancellationToken, search);
         return Proxy(result);
     }
 

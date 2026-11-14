@@ -121,5 +121,13 @@ public sealed class AdministrativeAuditRecord
         DateTimeOffset occurredAtUtc,
         string detailsJson) =>
         new(Guid.NewGuid(), organizationId, actorUserId, "payment_method.status_changed", "payment_method", paymentMethodId, occurredAtUtc, detailsJson);
+
+    public static AdministrativeAuditRecord PaymentMethodDeleted(
+        Guid organizationId,
+        Guid actorUserId,
+        Guid paymentMethodId,
+        DateTimeOffset occurredAtUtc,
+        string detailsJson) =>
+        new(Guid.NewGuid(), organizationId, actorUserId, "payment_method.deleted", "payment_method", paymentMethodId, occurredAtUtc, detailsJson);
 }
 
